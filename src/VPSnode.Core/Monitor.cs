@@ -70,6 +70,9 @@ public sealed class Monitor
                 await Execute(request.Kind, request.TargetId, token, "任务队列");
                 _store.Finish(request);
             }
+            // Reload after queued work: settings may have changed while a probe was running.
+            settings = _store.Settings;
+            if (!settings.ScheduledInspectionEnabled) { _offline = false; return; }
             if (!_offline && now - _lastTick < TimeSpan.FromMinutes(Math.Clamp(settings.IntervalMinutes, 2, 1440))) return;
             _offline = false;
             _lastTick = now;

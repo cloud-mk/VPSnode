@@ -31,13 +31,18 @@ internal static class Program
             if (i == 0 || i == 2) store.Record(new("speed", id, DateTimeOffset.Now.AddDays(-1), "完成", Value: i == 0 ? 10 : 100));
             if (i == 4) store.Record(new("node", id, DateTimeOffset.Now, "超时"));
         }
+        if (args.Contains("--screenshots"))
+        {
+            CapturePages(path, store);
+            return;
+        }
         if (args.Contains("--ui"))
         {
             var app = new App(); app.InitializeComponent();
             app.Startup += (_, _) => app.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var window = (MainWindow)app.MainWindow;
-                window.Title = "VPSnode UI 0.1.8 验收"; window.Width = 1008; window.Height = 690;
+                window.Title = "VPSnode UI 0.1.9 验收"; window.Width = 1180; window.Height = 740;
                 ((DispatcherTimer)typeof(MainWindow).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!).Stop();
             }));
             app.Run();
@@ -45,6 +50,53 @@ internal static class Program
         }
         VerifyUi(path, store);
         CheckBatch(store).GetAwaiter().GetResult();
+    }
+
+    private static void CapturePages(string path, Store store)
+    {
+        store.Save(store.Settings with { V2Directory = "" });
+        foreach (var (state, itemState, minutes) in new[] { ("已结束", "成功", 15), ("已结束", "失败", 10), ("已取消", "跳过", 5) })
+        {
+            var at = DateTimeOffset.Now.AddMinutes(-minutes);
+            var inspection = new Inspection("nodes", "手动", at, state,
+                [new("node", "fixture-0", "示例低延迟", itemState, itemState == "成功" ? "可用 · 后续 80.4 ms" : itemState == "失败" ? "示例连接失败" : "用户取消")]);
+            store.Record(new("task", "history", at, state, Wire.Encode(inspection)));
+        }
+        var app = new App(); app.InitializeComponent();
+        var window = new MainWindow(); app.MainWindow = window;
+        ((DispatcherTimer)typeof(MainWindow).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!).Stop();
+        window.Show();
+        foreach (var theme in new[] { "light", "dark" })
+        foreach (var width in new[] { 1280d, 1024d, 680d })
+        foreach (var page in new[] { "nodes", "settings", "tasks" })
+        {
+            store.Save(store.Settings with { Theme = theme });
+            typeof(MainWindow).Assembly.GetType("VPSnode.Desktop.Ui")!.GetMethod("Theme", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [theme]);
+            window.Width = width; window.Height = width == 680 ? 460 : 800;
+            typeof(MainWindow).GetMethod("Go", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [page]);
+            window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            window.UpdateLayout();
+            if (page == "nodes" && width == 1280 && theme == "light")
+                foreach (var table in Walk(window).OfType<DataGrid>())
+                {
+                    var scroll = (ScrollViewer)table.Template.FindName("DG_ScrollViewer", table);
+                    Console.WriteLine($"Grid width={table.ActualWidth} columns={table.Columns.Sum(c => c.ActualWidth)} viewport={scroll.ViewportWidth} extent={scroll.ExtentWidth} offset={table.CellsPanelHorizontalOffset}");
+                    Require(scroll.ScrollableWidth < 1, "wide node table needs no horizontal scrolling");
+                }
+            foreach (var scale in new[] { 1d, 1.5d, 2d })
+            {
+                // Captures the running WPF visual tree; this is not an OS-input or physical-monitor DPI test.
+                var visual = (FrameworkElement)window.Content;
+                var bitmap = new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth * scale), (int)Math.Ceiling(visual.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                bitmap.Render(visual);
+                var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                using var output = File.Create(Path.Combine(path, $"{page}-{theme}-{width}-{scale * 100}.png"));
+                png.Save(output);
+            }
+        }
+        typeof(MainWindow).GetField("_closing", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, true);
+        window.Close(); app.Shutdown();
+        Console.WriteLine("Captured running WPF pages with fictional data at 100/150/200% rendering scales.");
     }
 
     private static void VerifyUi(string path, Store store)
@@ -101,7 +153,7 @@ internal static class Program
         Require(disabledRows.Length == 2 && disabledRows.All(r => Read<string>(r, "Status").Contains("已禁用") && Read<string>(r, "Delay") == "—"),
             "panel or client disable takes priority over previous successful measurement");
         var staleRow = nodeRows.Single(r => Read<Node>(r, "Node").Id == stale.Id);
-        Require(Read<string>(staleRow, "Status").Contains("上次可用 · 已过时") && Read<string>(staleRow, "Delay") == "55 ms" && Read<string>(staleRow, "Recent") != "—",
+        Require(Read<string>(staleRow, "Status").Contains("上次可用 · 已过时") && Read<string>(staleRow, "Delay") == "55ms" && Read<string>(staleRow, "Recent") != "—",
             "stale latency is retained as a dated historical sample");
         Require(Walk(content).OfType<TextBlock>().Any(t => t.Text == "1 可用 · 0 已暂停"), "node group available count excludes disabled and stale results");
         Page("overview");
@@ -117,7 +169,7 @@ internal static class Program
         var counts = Walk(content).OfType<Button>().Where(b => b.ToolTip as string == "查看此 VPS 的节点").ToArray();
         Require(counts.Length == 2 && counts.All(b => b.BorderThickness == new Thickness(0) && b.FontSize == 17), "host count navigation has no border");
         Page("settings");
-        Require(Walk(content).OfType<Button>().Count(b => b.Content is "导出全部数据" or "导入数据") == 2, "settings backup actions present");
+        Require(Walk(content).OfType<Button>().Count(b => b.Content is "导出加密备份" or "导入恢复") == 2, "settings backup actions present");
         typeof(MainWindow).GetField("_closing", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(window, true);
         window.Close();
     }

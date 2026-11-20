@@ -38,6 +38,9 @@ jobs:
       - name: Desktop form flows
         shell: pwsh
         run: dotnet run --project tests/VPSnode.FormTests/VPSnode.FormTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-form-test"
+      - name: Scheduler and UI regressions
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.UiRegression/VPSnode.UiRegression.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-ui-regression"
       - name: Prepare installer tool
         run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP/wix"
       - name: Package Windows x64

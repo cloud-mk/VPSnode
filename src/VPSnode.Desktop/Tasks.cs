@@ -46,8 +46,8 @@ public partial class MainWindow
     private void UpdateTaskPanel()
     {
         var task = _runningTask;
-        TaskLabel.Text = task is null ? "空闲" : $"{task.Source} · {task.Label}";
-        TaskCounts.Text = task is null ? "" : $"{task.Items.Length - task.Remaining} / {task.Items.Length} 完成\n成功 {task.Success} · 失败 {task.Failed} · 跳过 {task.Skipped}";
+        TaskLabel.Text = task is null ? (_store.Settings.ScheduledInspectionEnabled ? "空闲" : "定时巡检未开启") : $"{task.Source} · {task.Label}";
+        TaskCounts.Text = task is null ? "手动检测与任务队列可用" : $"{task.Items.Length - task.Remaining} / {task.Items.Length} 完成\n成功 {task.Success} · 失败 {task.Failed} · 跳过 {task.Skipped}";
         TaskProgress.Visibility = StopTask.Visibility = task == null ? Visibility.Collapsed : Visibility.Visible;
         TaskProgress.Maximum = Math.Max(1, task?.Items.Length ?? 0);
         TaskProgress.Value = task == null ? 0 : task.Items.Length - task.Remaining;
@@ -63,8 +63,11 @@ public partial class MainWindow
             Ui.Button("全测下载速度", BatchSpeed)));
         if (_runningTask != null) panel.Children.Add(TaskDetails(_runningTask));
         foreach (var task in TaskHistory(_historyLimit))
-            panel.Children.Add(new Expander { Header = $"{task.Started.LocalDateTime:MM-dd HH:mm:ss} · {task.Source} · {task.Label} · {task.State} · {task.Summary}",
-                Content = null, Margin = new Thickness(0, 2, 0, 5), Tag = task });
+            panel.Children.Add(new Expander {
+                Header = Ui.Stack(Ui.Text($"{task.Started.LocalDateTime:MM-dd HH:mm} · {task.Label} · {task.State}", bold: true),
+                    Ui.Text($"{task.Source} · {task.Summary}", 12, "Quiet")),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Content = null, Margin = new Thickness(0, 4, 0, 8), Tag = task });
         foreach (var entry in panel.Children.OfType<Expander>())
         {
             var time = ((Inspection)entry.Tag).Started;
@@ -80,7 +83,7 @@ public partial class MainWindow
 
     private FrameworkElement TaskDetails(Inspection task)
     {
-        var table = Ui.Table(task.Items, [("目标", "Name", -1.2), ("本次状态", "State", 80), ("结果与原因", "Detail", -2.3)],
+        var table = Ui.Table(task.Items.Select(i => i with { Detail = DisplayFormat.Details(i.Detail) }), [("目标", "Name", -1.2), ("本次状态", "State", 80), ("结果与原因", "Detail", -2.3)],
             ("查看", item =>
             {
                 if (item.Kind is "node" or "speed" or "sni" && _store.Nodes.Any(n => n.Id == item.Id)) OpenNode(item.Id);

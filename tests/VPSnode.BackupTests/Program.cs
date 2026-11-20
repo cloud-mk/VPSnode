@@ -12,7 +12,7 @@ var cipher = Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes
 a.Save(new Host { Id = "h", Name = "fixture", Address = "192.0.2.1", PasswordCipher = cipher, KeyPath = "Z:/missing/key" });
 a.Save(ShareLink.New("vless://00000000-0000-4000-8000-000000000001@192.0.2.1:443?security=tls&sni=site.example.org&type=tcp#Fixture", "h", "n"));
 a.Save(new WebTarget { Id = "w", Name = "site", HostId = "h", Domain = "site.example.org", FallbackNodeIds = ["n"], CertificateNodeIds = ["n"] });
-a.Save(new Settings { Theme = "dark", V2Directory = "Z:/missing/v2rayN", FollowGroups = ["group"] });
+a.Save(new Settings { Theme = "dark", V2Directory = "Z:/missing/v2rayN", FollowGroups = ["group"], ScheduledInspectionEnabled = true });
 for (var i = 0; i < 5001; i++) a.Record(new("node", "n", DateTimeOffset.UnixEpoch.AddSeconds(i), "可用", Value: 90));
 a.Record(new("speed", "n", DateTimeOffset.UnixEpoch, "完成", Value: 20));
 a.Record(new("task", "all", DateTimeOffset.UnixEpoch, "完成", "巡检记录"));
@@ -26,6 +26,7 @@ Check(preview is { Hosts: 1, Nodes: 1, Websites: 1, Observations: 5003, Requests
 Check(preview.Warnings.Any(w => w.Contains("私钥")), "external key and dependency warning");
 var b = new Store(Path.Combine(root, "b"));
 b.ImportBackup(first, password, true);
+Check(b.Settings.ScheduledInspectionEnabled, "explicit scheduler choice survives encrypted restore");
 Check(Wire.Encode(a.CaptureBackup()) == Wire.Encode(b.CaptureBackup()), "complete semantic round trip including password and all tables");
 var second = Path.Combine(root, "second.vpsbackup");
 b.ExportBackup(second, password);

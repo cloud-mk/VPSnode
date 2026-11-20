@@ -4,7 +4,7 @@ Windows 本地 VPS 与代理节点管理工具，也是一份持续维护的网�
 
 集中记录 VPS、代理节点、网站与证书，将配置来源、关联关系和检测历史放在一起，方便查询、核对和迁移。
 
-[English](README.en.md) · [下载 / Releases](https://github.com/cloud-mk/VPSnode-public/releases) · [反馈 / Issues](https://github.com/cloud-mk/VPSnode-public/issues)
+[English](README.en.md) · [下载 / Releases](https://github.com/cloud-mk/VPSnode/releases) · [反馈 / Issues](https://github.com/cloud-mk/VPSnode/issues)
 
 ## 主要功能
 
@@ -40,13 +40,27 @@ VPSnode 分别记录面板配置、进程启动文件、实际监听和代理请
 
 默认数据目录为 `%LOCALAPPDATA%\VPSnode`，可通过 `VPSNODE_DATA` 指定独立目录。
 
-本地数据使用 Windows 当前用户的 DPAPI 保护。跨电脑迁移请使用「设置 → 导出全部数据」，不要直接复制数据库作为迁移方式。
+本地数据使用 Windows 当前用户的 DPAPI 保护。跨电脑迁移请使用「设置 → 数据管理 → 导出加密备份」，不要直接复制数据库作为迁移方式。
 
 全量备份使用 AES-256-GCM 加密和 PBKDF2-SHA256 口令派生，口令至少 12 字符；遗失口令无法恢复。外部 SSH 私钥、OpenSSH 配置及代理内核不包含在备份中，恢复后需重新配置相关路径。替换恢复前请先备份现有数据。
 
 分享链接、二维码及单节点配置导出可能包含连接凭据。提交问题或截图前，请移除服务器地址、域名、UUID、密码、私钥及其他私人信息。公开示例仅使用虚构数据。
 
 检测会连接你配置的服务器、网站和测试目标；下载测速会消耗网络流量。批量下载串行执行，每条最多 45 秒且受设置中的字节数限制。
+
+## 0.1.9 更新
+
+- 节点名称、协议、端口与状态支持悬停提示和双击详情；文字拖选、复制保留，失焦选区不再高亮。
+- 行内提供「详情 / 测延迟 / 测下载」，共用任务队列和检测能力，运行中防止重复提交。
+- 定时巡检默认关闭，旧配置也不自动启用；设置中可保存开关，手动检测、CLI 队列和维护保持可用。
+- 设置按七个功能区整理；流量以 MB 显示，精确保留原始字节上限。
+- 延迟统一显示整数 ms，原始检测值与分级依据保留；统一密码框深浅主题。
+- 新增连线 N 图标、品牌版本号和任务中心分层布局；支持窄窗口横向滚动。
+
+以下图片来自运行中的 WPF 界面，全部使用虚构资产与演示检测数据。
+
+![浅色代理节点列表](docs/screenshots/nodes-light.png)
+![深色代理节点列表](docs/screenshots/nodes-dark.png)
 
 ## 0.1.8 更新
 
@@ -71,12 +85,12 @@ dotnet build VPSnode.slnx -c Release
 
 ## 当前限制与反馈
 
-0.1.8 已进行自动化回归及部分真实环境验证，但尚未完成跨电脑恢复、干净系统安装／升级／卸载和长期连续运行的完整验收。协议与参数支持取决于本地代理内核和配置。未识别或不完整的配置需要进一步核对，不应视为已验证可用。
+0.1.9 已完成 Release 构建、隔离回归、真实本机 Xray 代理测试和运行时界面渲染检查。实际系统鼠标操作、物理多显示器 DPI 切换、跨电脑恢复、干净系统安装／升级／卸载和长期连续运行仍未完成验收。完整证据与限制见 [0.1.9 验收记录](docs/validation-0.1.9.md)。协议与参数支持取决于本地代理内核和配置。未识别或不完整的配置需要进一步核对，不应视为已验证可用。
 
 欢迎通过 Issues 提交缺陷和建议。请提供软件版本、复现步骤、预期结果及脱敏后的错误信息，不要上传真实资产数据库、备份、私钥或分享链接。
 
 ## 作者与许可
 
-作者：**cloud-mk**。原始项目：[cloud-mk/VPSnode-public](https://github.com/cloud-mk/VPSnode-public)。
+作者：**cloud-mk**。原始项目：[cloud-mk/VPSnode](https://github.com/cloud-mk/VPSnode)。
 
 本项目采用 [Apache License 2.0](LICENSE)。修改和再分发时请遵守许可证中的署名、修改说明及 NOTICE 保留要求。原始出处与署名信息见 [NOTICE](NOTICE)，第三方组件许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

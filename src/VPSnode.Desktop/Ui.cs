@@ -100,6 +100,7 @@ internal static class Ui
             {
                 var badge = new FrameworkElementFactory(typeof(LatencyBadge));
                 badge.SetBinding(LatencyBadge.ValueProperty, new Binding(property));
+                badge.SetBinding(LatencyBadge.MillisecondsProperty, new Binding("DelayValue"));
                 grid.Columns.Add(new DataGridTemplateColumn { Header = header, Width = length,
                     MinWidth = 80, SortMemberPath = property, CellTemplate = new DataTemplate { VisualTree = badge } });
                 continue;
@@ -126,6 +127,7 @@ internal static class Ui
             {
                 var button = new FrameworkElementFactory(typeof(Button));
                 button.SetValue(ContentControl.ContentProperty, label);
+                if (label is "测延迟" or "测下载") button.SetBinding(UIElement.IsEnabledProperty, new Binding("CanTest"));
                 button.SetValue(Control.PaddingProperty, new Thickness(8, 4, 8, 4));
                 button.AddHandler(System.Windows.Controls.Button.ClickEvent, new RoutedEventHandler((sender, _) =>
                 {
@@ -193,10 +195,12 @@ internal static class Ui
         var weightSum = flexible.Sum(f => f.Weight);
         void Fit()
         {
-            var available = grid.ActualWidth - 3 - fixedColumns.Sum(c => Math.Max(c.MinWidth, c.ActualWidth));
-            if (grid.ActualHeight >= grid.MaxHeight - 1) available -= SystemParameters.VerticalScrollBarWidth;
+            var scroller = grid.Template.FindName("DG_ScrollViewer", grid) as ScrollViewer;
+            var viewport = scroller?.ViewportWidth is > 0 ? scroller.ViewportWidth : grid.ActualWidth - 3;
+            var available = viewport - fixedColumns.Sum(c => Math.Max(c.MinWidth, c.ActualWidth));
+            var extra = Math.Max(0, available - flexible.Sum(f => f.Column.MinWidth));
             foreach (var (column, weight) in flexible)
-                column.Width = new DataGridLength(Math.Max(column.MinWidth, Math.Floor(available * weight / weightSum)));
+                column.Width = new DataGridLength(column.MinWidth + Math.Floor(extra * weight / weightSum));
         }
         Fit();
         grid.SizeChanged += (_, e) => { if (e.WidthChanged || e.HeightChanged) Fit(); };
@@ -214,6 +218,44 @@ internal static class Ui
         cell.SetBinding(TextBox.TextProperty, new Binding(field) { Mode = BindingMode.OneWay });
         cell.SetBinding(FrameworkElement.ToolTipProperty, new Binding(field));
         return cell;
+    }
+
+    internal static DataGridTemplateColumn NavigationColumn(string title, string field, string secondary, double width, double minimum, double speedMaximum = 0)
+    {
+        var group = new FrameworkElementFactory(typeof(StackPanel));
+        group.SetValue(FrameworkElement.MarginProperty, new Thickness(5, 5, 5, 5));
+        var cell = ValueCell(field);
+        var style = new Style(typeof(LedgerTextBox));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("Text")));
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Control.ForegroundProperty, new DynamicResourceExtension("ActionText")));
+        style.Triggers.Add(hover);
+        cell.SetValue(FrameworkElement.StyleProperty, style);
+        group.AppendChild(cell);
+        if (secondary.Length > 0)
+        {
+            var detail = ValueCell(secondary);
+            detail.SetResourceReference(Control.ForegroundProperty, "Quiet");
+            detail.SetValue(Control.FontSizeProperty, 12d);
+            group.AppendChild(detail);
+        }
+        if (speedMaximum > 0)
+        {
+            var strip = new FrameworkElementFactory(typeof(ProgressBar));
+            strip.SetValue(FrameworkElement.HeightProperty, 3d);
+            strip.SetValue(FrameworkElement.MarginProperty, new Thickness(3, 3, 3, 0));
+            strip.SetValue(ProgressBar.MaximumProperty, speedMaximum);
+            strip.SetValue(Control.BorderThicknessProperty, new Thickness(0));
+            strip.SetValue(Control.BackgroundProperty, Brushes.Transparent);
+            strip.SetResourceReference(ProgressBar.ForegroundProperty, "Speed");
+            strip.SetBinding(ProgressBar.ValueProperty, new Binding("Speed") { Mode = BindingMode.OneWay });
+            strip.SetBinding(UIElement.VisibilityProperty, new Binding("SpeedVisibility"));
+            strip.SetBinding(FrameworkElement.ToolTipProperty, new Binding("SpeedTip"));
+            group.AppendChild(strip);
+        }
+        return new DataGridTemplateColumn { Header = title, SortMemberPath = field, MinWidth = minimum,
+            Width = width < 0 ? new DataGridLength(-width, DataGridLengthUnitType.Star) : new DataGridLength(width),
+            CellTemplate = new DataTemplate { VisualTree = group } };
     }
 
     internal static DataGridTemplateColumn PairedColumn(string title, string first, string second, double width,

@@ -5,8 +5,14 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>VPSnode</AssemblyName>
+    <ApplicationIcon>Assets/VPSnode.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WPF owns startup and DPI awareness; WinForms is used only for native pickers/tray menus. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="Assets/VPSnode.ico" />
+    <Resource Include="Assets/VPSnode.png" />
     <ProjectReference Include="../VPSnode.Core/VPSnode.Core.csproj" />
     <PackageReference Include="QRCoder" Version="1.7.0" />
   </ItemGroup>

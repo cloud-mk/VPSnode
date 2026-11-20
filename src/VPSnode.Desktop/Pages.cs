@@ -176,28 +176,19 @@ public partial class MainWindow
             var ok = rows.Count(r => IsNodeAvailable(r.Node, last.GetValueOrDefault(("node", r.Node.Id))));
             var paused = rows.Count(r => IsPaused(r.Node));
             var row = Ui.Table(rows, [("节点 / 下载", "Name", -1.3), ("协议 / 传输", "Protocol", -1.5),
-                ("端口", "Port", 68), ("状态", "Status", -1), ("最近延迟", "Delay", 83), ("最近检测", "Recent", 105)],
-                ("详情", item => OpenNode(item.Node.Id)), ("分享", item => Share(item.Node)));
+                ("端口", "Port", 68), ("状态", "Status", -1), ("最近延迟", "Delay", 100), ("最近检测", "Recent", 105)],
+                ("详情", item => OpenNode(item.Node.Id)), ("测延迟", item => Run("node", item.Node.Id)), ("测下载", item => Run("speed", item.Node.Id)));
 
-            if (progress != null && rows.Any(r => r.TaskState.Length > 0))
-            {
-                var stateIndex = row.Columns.ToList().FindIndex(c => c.SortMemberPath == "Status");
-                row.Columns.RemoveAt(stateIndex);
-                row.Columns.Insert(stateIndex, Ui.PairedColumn("节点 / 本次任务", "Status", "TaskState", 1.2));
-            }
-            row.Columns.RemoveAt(0);
-            row.Columns.Insert(0, Ui.PairedColumn("节点 / 最近下载", "Name", "SpeedText", 1.6));
+            row.Columns[0] = Ui.NavigationColumn("节点 / 最近下载", "Name", "SpeedText", -1.5, 160, maximum);
+            row.Columns[1] = Ui.NavigationColumn("协议 / 传输", "Protocol", "", -1.2, 168);
+            row.Columns[2] = Ui.NavigationColumn("端口", "Port", "", 64, 64);
+            row.Columns[3] = Ui.NavigationColumn("状态", "Status", progress != null ? "TaskState" : "", -1, 116);
+            row.Columns[^1].Width = new DataGridLength(218);
+            row.Columns[^1].MinWidth = 218;
+            // Keep Details accessible; Run itself guards concurrent submissions.
+            row.LoadingRow += (_, e) => e.Row.ToolTip = "拖选文字可复制；双击文字或行内空白查看详情";
             row.RowHeight = double.NaN;
             row.MinRowHeight = 36;
-            var strip = new FrameworkElementFactory(typeof(ProgressBar));
-            strip.SetValue(ProgressBar.HeightProperty, 3d);
-            strip.SetValue(ProgressBar.MaximumProperty, maximum);
-            strip.SetValue(ProgressBar.BorderThicknessProperty, new Thickness(0));
-            strip.SetValue(ProgressBar.BackgroundProperty, Brushes.Transparent);
-            strip.SetResourceReference(ProgressBar.ForegroundProperty, "Speed");
-            strip.SetBinding(ProgressBar.ValueProperty, new System.Windows.Data.Binding("Speed") { Mode = System.Windows.Data.BindingMode.OneWay });
-            strip.SetBinding(VisibilityProperty, new System.Windows.Data.Binding("SpeedVisibility"));
-            strip.SetBinding(ToolTipProperty, new System.Windows.Data.Binding("SpeedTip"));
             var rowStyle = new Style(typeof(DataGridRow));
             rowStyle.Setters.Add(new Setter(ToolTipProperty, new System.Windows.Data.Binding("SpeedTip")));
             var groupBrush = groupIndex % 2 == 0 ? "Surface" : "GroupAlt";
@@ -207,17 +198,20 @@ public partial class MainWindow
             hover.Setters.Add(new Setter(BackgroundProperty, new DynamicResourceExtension("MutedSurface")));
             rowStyle.Triggers.Add(hover);
             row.RowStyle = rowStyle;
-            row.MouseDoubleClick += (_, e) =>
+            row.PreviewMouseLeftButtonDown += (_, e) =>
+            {
+                if (e.ClickCount != 2) return;
+                NavigateFromRow(e);
+            };
+            void NavigateFromRow(System.Windows.Input.MouseButtonEventArgs e)
             {
                 for (var source = e.OriginalSource as DependencyObject; source is Visual; source = VisualTreeHelper.GetParent(source))
                 {
-                    if (source is TextBox or Button) return;
-                    if (source is DataGridRow { Item: NodeRow item }) { OpenNode(item.Node.Id); return; }
+                    if (source is System.Windows.Controls.Primitives.ButtonBase) return;
+                    if (source is DataGridRow { Item: NodeRow item })
+                    { e.Handled = true; Dispatcher.BeginInvoke(new Action(() => OpenNode(item.Node.Id))); return; }
                 }
-            };
-            row.AreRowDetailsFrozen = true;
-            row.RowDetailsTemplate = new DataTemplate { VisualTree = strip };
-            row.RowDetailsVisibilityMode = DataGridRowDetailsVisibilityMode.Visible;
+            }
             var groupCard = Ui.Card(Ui.Stack(Ui.Value(title, 16, true),
                 Ui.Text($"{ok} 可用 · {paused} 已暂停", brush: "Quiet"), row));
             if (groupIndex++ % 2 == 1) { Ui.Brush(groupCard, Border.BackgroundProperty, "GroupAlt"); Ui.Brush(row, DataGrid.RowBackgroundProperty, "GroupAlt"); }
@@ -241,8 +235,8 @@ public partial class MainWindow
             Ui.Button(_config ? "趋势" : "配置详情", () => { _config = !_config; Render(); }),
             Ui.Button("分享", () => Share(n)), Ui.Button("编辑", () => EditNode(n)), Ui.Button("删除", () => RemoveAsset("node", n.Id, n.Name)));
         var root = Ui.Stack(actions, Ui.Row(Ui.Text(NodeState(n, ping), brush: "Quiet"),
-            Ui.Value(Time(ping) + (n.SourceRemoved ? "  ·  v2rayN 来源已删除" : "  ·  " + ping?.Detail), 13)));
-        if (_feedbackNode == n.Id) root.Children.Add(Ui.Text(_nodeFeedback, bold: true));
+            Ui.Value(Time(ping) + (n.SourceRemoved ? "  ·  v2rayN 来源已删除" : "  ·  " + DisplayFormat.Details(ping?.Detail ?? "")), 13)));
+        if (_feedbackNode == n.Id) root.Children.Add(Ui.Text(DisplayFormat.Details(_nodeFeedback), bold: true));
         if (speed != null) root.Children.Add(Ui.Text($"最近测速 {speed.At.ToLocalTime():HH:mm:ss} · {speed.State} · {speed.Detail}", brush: "Quiet"));
         var relations = Ui.Row();
         var owner = _store.Hosts.FirstOrDefault(h => h.Id == n.HostId);
@@ -263,7 +257,7 @@ public partial class MainWindow
             .Where(x => x.Value.HasValue && x.State == "完成").Take(12).Reverse().ToArray();
         Border Stat(string name, string text, string note) =>
             Ui.Card(Ui.Stack(Ui.Text(name, brush: "Quiet"), Ui.Value(text, 22, bold: true), Ui.Value(note, 13)));
-        root.Children.Add(Ui.Columns(Ui.Card(Ui.Stack(Ui.Text("最近延迟", brush: "Quiet"), new LatencyBadge { Value = ping?.State == "可用" ? Number(ping, "ms") : "—" }, Ui.Value(Time(ping), 13))), Stat("最近手动下载",
+        root.Children.Add(Ui.Columns(Ui.Card(Ui.Stack(Ui.Text("最近延迟", brush: "Quiet"), new LatencyBadge { Milliseconds = ping?.Value, Value = ping?.State == "可用" ? Number(ping, "ms") : "—" }, Ui.Value(Time(ping), 13))), Stat("最近手动下载",
             speed is null ? "尚未测速" : speed.Value.HasValue ? Number(speed, "Mbps") : speed.State, Time(speed)), Stat("最近检测", Time(ping), n.Protocol + " · " + n.Security)));
         var peers = _store.Nodes.Where(peer => peer.Id != n.Id && peer.HostId != n.HostId &&
             peer.Protocol == n.Protocol && peer.Security == n.Security &&
@@ -278,7 +272,8 @@ public partial class MainWindow
                 comparison.Content = Ui.Table(peers.Prepend(n).Select(peer => new {
                     peer.Id, peer.Name, Host = HostName(hosts.GetValueOrDefault(peer.HostId)),
                     Speed = speeds.TryGetValue(peer.Id, out var rate) ? $"{Number(rate, "Mbps")} · {Time(rate)}" : "未测速",
-                    Delay = Number(latest.GetValueOrDefault(("node", peer.Id)), "ms")
+                    Delay = Number(latest.GetValueOrDefault(("node", peer.Id)), "ms"),
+                    DelayValue = latest.GetValueOrDefault(("node", peer.Id))?.Value
                 }), [("VPS", "Host", -1), ("节点", "Name", -1.3), ("最近下载", "Speed", -1.4), ("最近延迟", "Delay", 90)],
                     ("详情", item => OpenNode(item.Id)));
             };

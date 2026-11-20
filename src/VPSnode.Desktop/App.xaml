@@ -54,6 +54,14 @@
    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
    <Setter Property="Padding" Value="8,5"/>
   </Style>
+  <Style TargetType="PasswordBox">
+   <Setter Property="Background" Value="{DynamicResource Surface}"/>
+   <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+   <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+   <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+   <Setter Property="SelectionBrush" Value="{DynamicResource TextSelection}"/>
+   <Setter Property="Padding" Value="8,5"/>
+  </Style>
   <Style TargetType="Expander">
     <Setter Property="Foreground" Value="{DynamicResource Text}"/>
     <Setter Property="Padding" Value="4"/>

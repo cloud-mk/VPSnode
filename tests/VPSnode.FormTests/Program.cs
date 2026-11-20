@@ -127,7 +127,7 @@ internal static class Program
     private static void CheckBackupForms(string root)
     {
         Call("Go", "settings"); Layout();
-        Require(Button(_window, "导出全部数据") is not null && Button(_window, "导入数据") is not null, "Settings exposes both backup entry buttons");
+        Require(Button(_window, "导出加密备份") is not null && Button(_window, "导入恢复") is not null, "Settings exposes both backup entry buttons");
         object? returned = null;
         const string password = "fixture-only-backup-18";
         Modal("加密导出", () => returned = Call("BackupPassword", true), dialog =>

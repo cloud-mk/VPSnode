@@ -4,7 +4,7 @@ A local Windows application for managing VPS hosts, proxy nodes, websites, and c
 
 Keep configuration sources, asset relationships, and inspection history together in a searchable network asset inventory.
 
-[简体中文](README.md) · [Downloads](https://github.com/cloud-mk/VPSnode-public/releases) · [Issues](https://github.com/cloud-mk/VPSnode-public/issues)
+[简体中文](README.md) · [Downloads](https://github.com/cloud-mk/VPSnode/releases) · [Issues](https://github.com/cloud-mk/VPSnode/issues)
 
 ## Features
 
@@ -48,6 +48,19 @@ Share links, QR codes, and individual node configuration exports may contain cre
 
 Checks connect to your configured servers, websites, and test endpoints. Download tests consume traffic. Batch downloads run sequentially, with a 45-second limit per node and the configured byte limit.
 
+## What's new in 0.1.9
+
+- Consistent node hover and double-click navigation, selectable text, and inactive-selection cleanup.
+- Per-node latency and download actions reuse the existing task pipeline and prevent duplicate submissions.
+- Scheduled inspection is opt-in, including upgrades from settings without an explicit switch. Manual tasks, CLI queues, and maintenance remain available.
+- Seven settings sections, exact decimal MB conversion, integer latency labels with original precision retained, and themed password fields.
+- Cable-N branding, matching version labels, clearer task status, and horizontally scrollable narrow layouts.
+
+Screenshots are captured from the running WPF interface using fictional assets and demonstration results.
+
+![Light node list](docs/screenshots/nodes-light.png)
+![Dark node list](docs/screenshots/nodes-dark.png)
+
 ## What's new in 0.1.8
 
 - More complete collection of 3x-ui clients, transport settings, and fallback rules.
@@ -71,12 +84,12 @@ Choose a fresh output directory. MSI packaging additionally requires WiX 5; spec
 
 ## Limitations and feedback
 
-Version 0.1.8 has undergone automated regression tests and selected live-environment checks. Cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended continuous operation have not yet completed full acceptance testing. Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
+Version 0.1.9 passed Release builds, isolated regressions, local Xray proxy integration, and runtime WPF rendering checks. OS mouse interactions, physical multi-monitor DPI transitions, cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended operation remain unverified. See [validation evidence](docs/validation-0.1.9.md). Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
 
 Please include the application version, reproduction steps, expected behavior, and sanitized error details when opening an issue. Do not upload real asset databases, backups, private keys, or share links.
 
 ## Author and license
 
-Author: **cloud-mk**. Original project: [cloud-mk/VPSnode-public](https://github.com/cloud-mk/VPSnode-public).
+Author: **cloud-mk**. Original project: [cloud-mk/VPSnode](https://github.com/cloud-mk/VPSnode).
 
 Licensed under the [Apache License 2.0](LICENSE). Modifications and redistributions must comply with its attribution, change notice, and NOTICE requirements. See [NOTICE](NOTICE) for attribution and original project information, and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for third-party licenses.

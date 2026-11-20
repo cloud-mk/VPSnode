@@ -42,11 +42,13 @@ public partial class MainWindow : Window
     private readonly SqliteCommand _changes;
     private long _renderVersion = -1;
     private long _noticeVersion = -1;
-    private string _v2SettingsHint = "";
 
     public MainWindow()
     {
         InitializeComponent();
+        var version = typeof(Store).Assembly.GetName().Version!.ToString(3);
+        Title = $"VPSnode {version}";
+        BrandVersion.Text = $"v{version}";
         Width = Math.Min(Width, Math.Max(MinWidth, SystemParameters.WorkArea.Width - 16));
         Height = Math.Min(Height, Math.Max(MinHeight, SystemParameters.WorkArea.Height - 16));
         _monitor = new(_store);
@@ -188,7 +190,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Status(string label) => StatusLine.Text = "●  " + label;
+    private void Status(string label) => StatusLine.Text = "●  " + DisplayFormat.Details(label);
     private void Fail(Exception ex)
     {
         var text = ex is InvalidDataException or TimeoutException ? ex.Message : "操作未完成，请检查本机设置或读取权限。";
@@ -225,6 +227,7 @@ public partial class MainWindow : Window
     private void Render()
     {
         _intervalMinutes = _store.Settings.IntervalMinutes;
+        UpdateTaskPanel();
         Navigation.Children.Clear();
         foreach (var (key, name) in _menu)
         {
@@ -262,7 +265,7 @@ public partial class MainWindow : Window
 
     private static string Time(Observation? value) => value?.At.ToLocalTime().ToString("MM-dd HH:mm") ?? "—";
     private static string Number(Observation? value, string unit) =>
-        value?.Value is double number ? $"{number:0.#} {unit}" : "—";
+        value?.Value is double number ? (unit == "ms" ? DisplayFormat.Latency(number) : $"{number:0.#} {unit}") : "—";
     private static string HostName(Host? host) => host is null ? "未关联" :
         string.IsNullOrEmpty(host.Hostname) ? host.Name : host.Hostname;
     private static string Field(string first, string second) => string.IsNullOrWhiteSpace(first) ? second : first;
@@ -309,7 +312,7 @@ public partial class MainWindow : Window
     }
 
     private readonly record struct NodeRow(Node Node, string Host, string Name, string Protocol, string Port,
-        string Status, string Delay, string Recent, double Speed = 0, string SpeedTip = "尚未测速", string TaskState = "")
+        string Status, string Delay, string Recent, double Speed = 0, string SpeedTip = "尚未测速", string TaskState = "", bool CanTest = true, double? DelayValue = null)
     {
         public string SpeedText => SpeedTip == "尚未测速" ? "未测速" : $"{Speed:0.#} Mbps";
         public Visibility SpeedVisibility => SpeedTip == "尚未测速" ? Visibility.Collapsed : Visibility.Visible;
@@ -321,7 +324,7 @@ public partial class MainWindow : Window
 
     private NodeRow NodeItem(Node n, Host? host, Observation? last) => new(n, HostName(host), n.Name,
         string.Join(" · ", new[] { n.Protocol, n.Transport, n.Security }.Where(x => x.Length != 0)),
-        n.Port == 0 ? "—" : n.Port.ToString(), NodeState(n, last), IsPaused(n) || IsPanelDisabled(n) || last?.State != "可用" ? "—" : Number(last, "ms"), Time(last));
+        n.Port == 0 ? "—" : n.Port.ToString(), NodeState(n, last), IsPaused(n) || IsPanelDisabled(n) || last?.State != "可用" ? "—" : Number(last, "ms"), Time(last), CanTest: _current == null && _runningTask == null, DelayValue: last?.State == "可用" ? last.Value : null);
 
     private StackPanel OverviewPage()
     {

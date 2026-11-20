@@ -6,7 +6,7 @@ Use a fresh isolated directory for each run. Never point tests at your normal ap
 每次测试使用全新隔离目录，不得使用日常台账目录。
 
 ```powershell
-$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests'
+$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests', 'UiRegression'
 foreach ($suite in $suites) {
     dotnet run --project "tests/VPSnode.$suite/VPSnode.$suite.csproj" -c Release -- "../test-data/$suite"
     if ($LASTEXITCODE) { throw "Failed: $suite" }
@@ -22,3 +22,5 @@ Optional live tests require explicit authorization for the target host. For Iden
 Architecture: `VPSnode.Core` handles storage, inventory and probes; `VPSnode.Desktop` contains the WPF interface; `VPSnode.Cli` provides local commands. Keep configured state, listener evidence, and successful proxy requests separate. Never merge different client identities or infer fallbacks from a share address alone.
 
 Public contributions must use fictional identifiers and documentation IP ranges. Do not commit databases, backups, credentials, personal paths, or screenshots of real assets. Release packages must include both READMEs, LICENSE, NOTICE, and dependency notices.
+
+For the opt-in loopback proxy suite, screenshot rendering and the exact verification limits of this version, see [validation-0.1.9.md](validation-0.1.9.md). The portable package also includes these documents, screenshots and CHANGELOG.md.

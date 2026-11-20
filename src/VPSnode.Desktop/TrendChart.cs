@@ -104,6 +104,6 @@ internal sealed class TrendChart : FrameworkElement
         var position = Math.Clamp((e.GetPosition(this).X - 46) / Math.Max(1, ActualWidth - 56), 0, .999);
         var sample = _bars ? success[(int)(success.Length * position)] :
             success.MinBy(x => Math.Abs((x.At - (_start + (_end - _start) * position)).TotalSeconds))!;
-        ToolTip = $"{sample.At.LocalDateTime:g} · {sample.Value:0.#} {(_bars ? "Mbps" : "ms")}";
+        ToolTip = $"{sample.At.LocalDateTime:g} · {(_bars ? $"{sample.Value:0.#} Mbps" : DisplayFormat.Latency(sample.Value ?? 0))}";
     }
 }

@@ -310,7 +310,7 @@ internal static class Program
         window.UpdateLayout();
         Require(Walk(window).OfType<TextBlock>().Any(b => b.Text.Contains("最近测速") && b.Text.Contains("请补充分享链接")),
             "latest speed failure remains visible after a previous success");
-        Require(window.Title == "VPSnode" && window.IsVisible, "WPF window and desktop pages open");
+        Require(window.Title == "VPSnode 0.1.9" && window.IsVisible, "WPF window and desktop pages open");
         var qrFound = false;
         var timeout = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         timeout.Tick += (_, _) =>

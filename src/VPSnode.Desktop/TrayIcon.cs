@@ -19,12 +19,15 @@ internal sealed class TrayIcon : IDisposable
     private readonly Forms.ContextMenuStrip _menu;
     private readonly uint _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
     private readonly IntPtr _handle;
+    private readonly System.Drawing.Icon _icon;
     private bool _disposed;
 
     internal TrayIcon(HwndSource source, string directory, Action open, Action quit)
     {
         _source = source;
         _handle = source.Handle;
+        using (var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/VPSnode;component/Assets/VPSnode.ico")).Stream)
+            _icon = new System.Drawing.Icon(resource, System.Windows.Forms.SystemInformation.SmallIconSize);
         _open = open;
         // Explorer associates a GUID with an executable path. Portable copies and separate data profiles have distinct identities.
         var identity = Environment.ProcessPath + "|" + Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
@@ -50,7 +53,7 @@ internal sealed class TrayIcon : IDisposable
         var icon = Data();
         icon.Flags |= MessageFlag | IconFlag | TipFlag | ShowTipFlag;
         icon.Callback = Callback;
-        icon.Icon = System.Drawing.SystemIcons.Application.Handle;
+        icon.Icon = _icon.Handle;
         icon.Tip = "VPSnode · 本机巡检";
         if (!Notify(Add, icon) && !Notify(Modify, icon)) return;
         icon.Version = 4;
@@ -102,6 +105,7 @@ internal sealed class TrayIcon : IDisposable
         Notify(Delete, Data());
         _source.RemoveHook(Messages);
         _menu.Dispose();
+        _icon.Dispose();
     }
 
     private static bool Notify(uint action, IconData data) => Shell_NotifyIcon(action, ref data);

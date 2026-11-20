@@ -17,11 +17,12 @@ public sealed class LedgerTextBox : TextBox
         Cursor = Cursors.IBeam;
         Background = Brushes.Transparent;
         BorderThickness = Padding = new Thickness(0);
-        SetResourceReference(ForegroundProperty, "Text");
+        SetResourceReference(StyleProperty, typeof(TextBox));
         SetResourceReference(SelectionBrushProperty, "TextSelection");
         SetResourceReference(SelectionTextBrushProperty, "SelectedText");
         SelectionOpacity = 1;
-        IsInactiveSelectionHighlightEnabled = true;
+        IsInactiveSelectionHighlightEnabled = false;
+        DataContextChanged += (_, _) => Select(0, 0);
         ContextMenu = new ContextMenu();
         var copy = new MenuItem { Header = "复制", InputGestureText = "Ctrl+C" };
         copy.Click += (_, _) => CopyValue(SelectionLength > 0 ? SelectedText : Text);

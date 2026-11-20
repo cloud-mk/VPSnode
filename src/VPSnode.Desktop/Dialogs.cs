@@ -528,84 +528,6 @@ public partial class MainWindow
         window.ShowDialog();
     }
 
-    private StackPanel SettingsPage()
-    {
-        var current = _store.Settings;
-        var path = new TextBox { Text = current.V2Directory, MinWidth = 480 };
-        var interval = new TextBox { Text = current.IntervalMinutes.ToString(), Width = 85, HorizontalAlignment = HorizontalAlignment.Left };
-        var history = new TextBox { Text = current.HistoryDays.ToString(), Width = 85, HorizontalAlignment = HorizontalAlignment.Left };
-        var delay = new TextBox { Text = current.PingUrl };
-        var pingStatus = new TextBox { Text = current.PingStatus.ToString(), Width = 85, HorizontalAlignment = HorizontalAlignment.Left };
-        var speed = new TextBox { Text = current.SpeedUrl };
-        var bytes = new TextBox { Text = current.SpeedBytes.ToString(), Width = 105, HorizontalAlignment = HorizontalAlignment.Left };
-        var dark = new CheckBox { Content = "深色模式", IsChecked = current.Theme == "dark" };
-        void ChangeTheme(object sender, RoutedEventArgs args)
-        {
-            var theme = dark.IsChecked == true ? "dark" : "light";
-            _store.Save(_store.Settings with { Theme = theme });
-            Ui.Theme(theme);
-        }
-        dark.Checked += ChangeTheme;
-        dark.Unchecked += ChangeTheme;
-        void Save()
-        {
-            try
-            {
-                var p = path.Text.Trim().Trim('"');
-                if (p.Length > 0 && !File.Exists(Path.Combine(p, "v2rayN.exe")))
-                    throw new InvalidDataException("请选择包含 v2rayN.exe 的安装目录。");
-                if (!Validation.WebUrl(delay.Text.Trim()) || !Validation.WebUrl(speed.Text.Trim()))
-                    throw new InvalidDataException("请填写 http 或 https 测试地址。");
-                var old = _store.Settings;
-                _store.Save(old with
-                {
-                    V2Directory = p, FollowGroups = string.Equals(p, old.V2Directory, StringComparison.OrdinalIgnoreCase) ? old.FollowGroups : [],
-                    IntervalMinutes = Integer(interval.Text, 2, 1440, "巡检间隔"),
-                    HistoryDays = Integer(history.Text, 1, 365, "历史保留天数"),
-                    PingUrl = delay.Text.Trim(), PingStatus = Integer(pingStatus.Text, 100, 599, "延迟测试状态码"),
-                    SpeedUrl = speed.Text.Trim(), SpeedBytes = Integer(bytes.Text, 100_000, 100_000_000, "测速字节上限")
-                });
-                _v2SettingsHint = $"Xray：{(ProxyProbe.FindCore(p, "xray") is null ? "未找到" : "已发现")} · sing-box：{(ProxyProbe.FindCore(p, "sing-box") is null ? "未找到" : "已发现")}";
-                Status("设置已保存");
-                Render();
-            }
-            catch (Exception ex) { Fail(ex); }
-        }
-        return Ui.Stack(Header("设置", Ui.Button("保存设置", Save, true), Ui.Button("退出应用", Quit)),
-            Ui.Card(Ui.Stack(Ui.Section("外观"), dark)),
-            Ui.Card(Ui.Stack(Ui.Section("备份与迁移"),
-                Ui.Text("导出全部资产、设置和历史。备份始终使用独立口令加密，可在另一台电脑恢复。", brush: "Quiet"),
-                Ui.Row(Ui.Button("导出全部数据", ExportBackup), Ui.Button("导入数据", ImportBackup)))),
-            Ui.Card(Ui.Stack(Ui.Section("v2rayN 安装目录"),
-                Ui.Row(path, Ui.Button("浏览", () =>
-                {
-                    using var browse = new Forms.FolderBrowserDialog();
-                    if (Directory.Exists(path.Text)) browse.SelectedPath = path.Text;
-                    if (browse.ShowDialog() == Forms.DialogResult.OK) path.Text = browse.SelectedPath;
-                })), Ui.Text(_v2SettingsHint, brush: "Quiet"),
-                Ui.Button("查看分组和同步", SyncDialog))),
-            Ui.Card(Ui.Stack(Ui.Section("巡检和测速"), Ui.Text("巡检间隔（分钟）"), interval, Ui.Text("历史保留（天）"), history,
-                Ui.Row(Ui.Text("延迟测试 URL"), Ui.Button("读取 v2rayN 的测试目标", () =>
-                {
-                    try
-                    {
-                        using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(path.Text.Trim(), "guiConfigs", "guiNConfig.json")));
-                        var item = config.RootElement.EnumerateObject().First(p => p.Name.Equals("SpeedTestItem", StringComparison.OrdinalIgnoreCase)).Value;
-                        var url = item.EnumerateObject().First(p => p.Name.Equals("SpeedPingTestUrl", StringComparison.OrdinalIgnoreCase)).Value.GetString();
-                        if (url is null || !Validation.WebUrl(url)) throw new InvalidDataException("v2rayN 测试目标无效。");
-                        delay.Text = url;
-                        Status("已读取目标，保存设置后生效");
-                    }
-                    catch (Exception ex) { Fail(ex); }
-                })), delay, Ui.Text("期望状态码"), pingStatus, Ui.Text("手动下载测速 URL"), speed,
-                Ui.Text("单次下载上限（字节）"), bytes)),
-            Ui.Card(Ui.Stack(Ui.Section("关于 VPSnode"),
-                Ui.Value($"VPSnode {typeof(Store).Assembly.GetName().Version!.ToString(3)} · 构建于 {System.Reflection.CustomAttributeExtensions.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>(typeof(Store).Assembly).FirstOrDefault(a => a.Key == "BuildDateUtc")?.Value} UTC"),
-                Ui.Text("Windows 本地 VPS 网络资产台账与巡检工具。桌面和 CLI 共用 SQLite，节点实测复用 v2rayN。"),
-                Ui.Text("作者 cloud-mk · Apache-2.0 开源许可。原始项目：https://github.com/cloud-mk/VPSnode-public。署名与许可见随包 NOTICE、LICENSE。第三方依赖：.NET / Microsoft.Data.Sqlite / ProtectedData（MIT）、SQLitePCLRaw / DnsClient（Apache-2.0）、SQLite（公有领域）、QRCoder（MIT）。", 12, "Quiet"))),
-            Ui.Card(Ui.Stack(Ui.Section("本机数据"), Ui.Value(_store.DirectoryPath))));
-    }
-
     private void SyncDialog()
     {
         try
@@ -637,7 +559,7 @@ public partial class MainWindow
                 result.Text = follow.Length == 0 ? "自动跟随已关闭。" : $"已为 {follow.Length} 个分组开启自动跟随。";
             }), Ui.Button("关闭", () => window.Close())));
             window.ShowDialog();
-            Render();
+            if (_page != "settings") Render();
         }
         catch (Exception ex) { Fail(ex); }
     }

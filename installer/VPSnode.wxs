@@ -3,6 +3,8 @@
       UpgradeCode="DCA6EF3D-A1E6-4579-A1F4-2D6F1A06F490" Scope="perUser" Language="1033">
     <MajorUpgrade DowngradeErrorMessage="A newer version of VPSnode is already installed." />
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Icon Id="VPSnodeIcon" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="VPSnodeIcon" />
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="UserPrograms" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="VPSnode" />
@@ -12,7 +14,7 @@
       <Directory Id="VPSnodeMenu" Name="VPSnode">
         <Component Id="StartMenu" Guid="739ADDAF-44A7-42AC-A9DD-FEA31E440E04">
           <Shortcut Id="AppShortcut" Name="VPSnode" Target="[INSTALLFOLDER]VPSnode.exe"
-            WorkingDirectory="INSTALLFOLDER" Description="Open VPSnode" />
+            WorkingDirectory="INSTALLFOLDER" Description="Open VPSnode" Icon="VPSnodeIcon" IconIndex="0" />
           <RegistryValue Root="HKCU" Key="Software\VPSnode\Installer" Name="Menu" Type="integer" Value="1" KeyPath="yes" />
           <RemoveFolder Id="RemoveMenu" On="uninstall" />
         </Component>

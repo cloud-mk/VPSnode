@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)] [string] $Output,
     [string] $DotNet = 'dotnet',
     [string] $Wix,
-    [string] $Version = '0.1.8'
+    [string] $Version = '0.1.9'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,11 +30,13 @@ foreach ($entry in 'VPSnode.exe', 'vpsnode-cli.exe') {
     Remove-Item -LiteralPath (Join-Path $payload "DLL/$entry")
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.md') -Destination (Join-Path $payload 'README.md')
-foreach ($document in 'README.en.md', 'LICENSE', 'NOTICE') {
+foreach ($document in 'README.en.md', 'LICENSE', 'NOTICE', 'CHANGELOG.md') {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $document) -Destination (Join-Path $payload $document)
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.md') -Destination (Join-Path $payload 'THIRD-PARTY-NOTICES.md')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'licenses') -Destination $payload -Recurse
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'docs') -Destination $payload -Recurse
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'examples') -Destination $payload -Recurse
 # Publish does not copy runtime-pack license files; include the notices for the exact resolved versions.
 $deps = Get-Content -LiteralPath (Join-Path $payload 'DLL/VPSnode.deps.json') -Raw | ConvertFrom-Json -AsHashtable
 $assets = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'src/VPSnode.Desktop/obj/project.assets.json') -Raw | ConvertFrom-Json -AsHashtable
@@ -111,7 +113,7 @@ if ($Wix) {
         $writer.WriteEndElement()
     } finally { $writer.Dispose() }
     $msi = Join-Path $Output "VPSnode-$Version-win-x64.msi"
-    Invoke-Native $Wix @('build', '-arch', 'x64', '-d', "Version=$Version", '-out', $msi,
+    Invoke-Native $Wix @('build', '-arch', 'x64', '-d', "Version=$Version", '-d', "IconPath=$(Join-Path $PSScriptRoot 'src/VPSnode.Desktop/Assets/VPSnode.ico')", '-out', $msi,
         (Join-Path $PSScriptRoot 'installer/VPSnode.wxs'), $fileList)
 }
 Get-ChildItem -LiteralPath $Output -File | Where-Object Extension -in '.msi', '.zip' | Sort-Object Name |

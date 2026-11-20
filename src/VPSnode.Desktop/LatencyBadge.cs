@@ -11,6 +11,10 @@ internal sealed class LatencyBadge : Border
         typeof(string), typeof(LatencyBadge), new PropertyMetadata("", (d, _) => ((LatencyBadge)d).Update()));
     public string Value { get => (string)GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
 
+    public static readonly DependencyProperty MillisecondsProperty = DependencyProperty.Register(nameof(Milliseconds),
+        typeof(double?), typeof(LatencyBadge), new PropertyMetadata(null, (d, _) => ((LatencyBadge)d).Update()));
+    public double? Milliseconds { get => (double?)GetValue(MillisecondsProperty); set => SetValue(MillisecondsProperty, value); }
+
     public LatencyBadge()
     {
         HorizontalAlignment = HorizontalAlignment.Left;
@@ -23,7 +27,9 @@ internal sealed class LatencyBadge : Border
     private void Update()
     {
         var text = Ui.Value(Value, 14, true);
-        if (double.TryParse(Value.Split(' ')[0], NumberStyles.Float, CultureInfo.CurrentCulture, out var ms) && ms >= 0)
+        text.TextWrapping = TextWrapping.NoWrap;
+        var ms = Milliseconds ?? (double.TryParse(Value.Replace("ms", "").Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) ? parsed : -1);
+        if (Value != "—" && ms >= 0)
         {
             Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(ms <= 80 ? "#68E8A5" : ms <= 160 ? "#FFBD69" : "#8E293E"));
             text.Foreground = ms <= 160 ? new SolidColorBrush(Color.FromRgb(13, 28, 28)) : Brushes.White;

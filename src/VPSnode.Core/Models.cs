@@ -89,6 +89,7 @@ public sealed record Settings
 {
     public string V2Directory { get; init; } = "";
     public string Theme { get; init; } = "light";
+    public bool ScheduledInspectionEnabled { get; init; } = false;
     public int IntervalMinutes { get; init; } = 15;
     public int HistoryDays { get; init; } = 90;
     public int SpeedBytes { get; init; } = 10_000_000;
