@@ -69,5 +69,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A manually verified release may already have created this tag.
+          # Preserve its published assets instead of recreating or overwriting them.
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --json id 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'Release already exists; preserving its notes and assets.'
+            exit 0
+          }
           gh release create $env:GITHUB_REF_NAME (Get-ChildItem -Path release -File).FullName --repo $env:GITHUB_REPOSITORY --verify-tag --draft --generate-notes
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
