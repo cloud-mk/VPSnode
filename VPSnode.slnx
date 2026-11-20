@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="src/VPSnode.Core/VPSnode.Core.csproj" />
+  <Project Path="src/VPSnode.Cli/VPSnode.Cli.csproj" />
+  <Project Path="src/VPSnode.Desktop/VPSnode.Desktop.csproj" />
+  <Project Path="tests/VPSnode.Smoke/VPSnode.Smoke.csproj" />
+  <Project Path="tests/VPSnode.BackupTests/VPSnode.BackupTests.csproj" />
+  <Project Path="tests/VPSnode.IdentityTests/VPSnode.IdentityTests.csproj" />
+  <Project Path="tests/VPSnode.InventoryChecks/VPSnode.InventoryChecks.csproj" />
+  <Project Path="tests/VPSnode.UiBatch/VPSnode.UiBatch.csproj" />
+  <Project Path="tests/VPSnode.FormTests/VPSnode.FormTests.csproj" />
+</Solution>

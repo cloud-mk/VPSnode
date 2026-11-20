@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+*.user
+*.db*
+*.publish.xml
+release/
+artifacts/
+local/
+.env
+build-tools/
+validation/
+candidates/

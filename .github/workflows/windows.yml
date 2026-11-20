@@ -1,0 +1,73 @@
+name: Windows build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      DOTNET_ROLL_FORWARD: Major
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Smoke test
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.Smoke/VPSnode.Smoke.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-test"
+      - name: Backup round trip
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.BackupTests/VPSnode.BackupTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-backup-test"
+      - name: Identity and inventory regression
+        shell: pwsh
+        run: |
+          dotnet run --project tests/VPSnode.IdentityTests/VPSnode.IdentityTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-identity-test"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/VPSnode.InventoryChecks/VPSnode.InventoryChecks.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-inventory-test"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet run --project tests/VPSnode.UiBatch/VPSnode.UiBatch.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-batch-test"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Desktop form flows
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.FormTests/VPSnode.FormTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-form-test"
+      - name: Prepare installer tool
+        run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP/wix"
+      - name: Package Windows x64
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { ([xml](Get-Content Directory.Build.props -Raw)).Project.PropertyGroup.Version }
+          ./build.ps1 -Output "$env:RUNNER_TEMP/VPSnode-release" -Wix "$env:RUNNER_TEMP/wix/wix.exe" -Version $version
+      - uses: actions/upload-artifact@v6
+        with:
+          name: VPSnode-win-x64
+          path: |
+            ${{ runner.temp }}/VPSnode-release/*.msi
+            ${{ runner.temp }}/VPSnode-release/*.zip
+            ${{ runner.temp }}/VPSnode-release/SHA256SUMS.txt
+          if-no-files-found: error
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    runs-on: windows-2025
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: VPSnode-win-x64
+          path: release
+      - name: Create draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME (Get-ChildItem -Path release -File).FullName --repo $env:GITHUB_REPOSITORY --verify-tag --draft --generate-notes
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

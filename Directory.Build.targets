@@ -1,0 +1,10 @@
+<Project>
+  <!-- The standard SDK apphost can start a managed entry point in a subdirectory. -->
+  <Target Name="CreatePackageEntry" AfterTargets="Publish" Condition="'$(PackageEntryDirectory)' != ''">
+    <CreateAppHost AppHostSourcePath="$(AppHostSourcePath)"
+                   AppHostDestinationPath="$(PackageEntryDirectory)/$(AssemblyName).exe"
+                   AppBinaryName="DLL/$(AssemblyName).dll"
+                   IntermediateAssembly="@(IntermediateAssembly->'%(FullPath)')"
+                   WindowsGraphicalUserInterface="$(_UseWindowsGraphicalUserInterface)" />
+  </Target>
+</Project>

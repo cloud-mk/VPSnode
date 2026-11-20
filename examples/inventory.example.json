@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "hosts": [
+    {
+      "id": "example-vps",
+      "name": "示例主机",
+      "address": "192.0.2.24",
+      "hostname": "example-vps",
+      "hardware": "2 vCPU · 4 GiB · 60 GiB",
+      "tunnelPort": 31909,
+      "panelPath": "/example/",
+      "enabled": false
+    }
+  ],
+  "nodes": [
+    {
+      "id": "example-node",
+      "name": "示例 XHTTP TLS",
+      "hostId": "example-vps",
+      "protocol": "VLESS",
+      "transport": "xhttp",
+      "security": "tls",
+      "port": 443,
+      "paused": true
+    }
+  ],
+  "websites": [
+    {
+      "id": "example-web",
+      "name": "示例站点",
+      "hostId": "example-vps",
+      "domain": "site.example.org",
+      "port": 443,
+      "location": "公网",
+      "fallbackNodeIds": ["example-node"],
+      "enabled": false
+    }
+  ]
+}
