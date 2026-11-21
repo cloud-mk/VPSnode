@@ -6,7 +6,7 @@ Use a fresh isolated directory for each run. Never point tests at your normal ap
 每次测试使用全新隔离目录，不得使用日常台账目录。
 
 ```powershell
-$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests', 'UiRegression', 'StabilityTests'
+$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests', 'UiRegression', 'StabilityTests', 'AgentTests'
 foreach ($suite in $suites) {
     dotnet run --project "tests/VPSnode.$suite/VPSnode.$suite.csproj" -c Release -- "../test-data/$suite"
     if ($LASTEXITCODE) { throw "Failed: $suite" }
@@ -15,6 +15,8 @@ foreach ($suite in $suites) {
 
 Default suites use synthetic fixtures. WPF checks run application event handlers in-process; they do not prove OS mouse, keyboard, or file-picker behavior.
 默认测试使用虚构数据。WPF 测试在进程内执行界面事件，不等同于系统鼠标、键盘或文件选择器验收。
+
+0.1.11 的 AgentTests 真正启动独立 CLI/worker 子进程，覆盖资产、设置、来源、任务、失败退出码、加密恢复及回环 HTTP。ProxyUiTests 增加 CLI/GUI 跨进程进度、取消、等待超时、真实执行进程被终止后的恢复及过期 TLS 证书握手；仍需显式指定本机已有的 Xray，不能用假检测替代。详见 [Agent CLI](agent-cli.md)、[覆盖矩阵](coverage-0.1.11.md) 与 [验收边界](validation-0.1.11.md)。
 
 Optional live tests require explicit authorization for the target host. For IdentityTests `--real`, set `VPSNODE_TEST_SSH_ALIAS` and `VPSNODE_TEST_V2RAYN_DIRECTORY`. FormTests accepts `--live-ui SSH_ALIAS`. These modes read your own configuration and contact the specified host. Do not publish their output or run them in public CI.
 真实环境测试仅适用于已授权主机，使用上述环境变量或参数指定本地配置。不要公开其输出，也不要在公开 CI 中执行。

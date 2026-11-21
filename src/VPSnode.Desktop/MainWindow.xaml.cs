@@ -37,11 +37,9 @@ public partial class MainWindow : Window
     private bool _closing;
     private bool _webCertificates;
     private int _historyDays = 1;
-    private int _intervalMinutes = 15;
     private int _configurationTab;
     private readonly SqliteCommand _changes;
     private long _renderVersion = -1;
-    private long _noticeVersion = -1;
 
     public MainWindow()
     {
@@ -118,12 +116,8 @@ public partial class MainWindow : Window
         {
             await _tick;
             if (_closing) return;
-            var version = Convert.ToInt64(_changes.ExecuteScalar());
-            if (_noticeVersion != version)
-            {
-                ShowNotices();
-                _noticeVersion = version;
-            }
+            RefreshSharedTasks();
+            ShowNotices();
             if (IsVisible) RefreshIfChanged();
         }
         catch (OperationCanceledException) { }
@@ -133,7 +127,7 @@ public partial class MainWindow : Window
     private void ShowNotices()
     {
         foreach (var item in _store.Latest().Values.Where(x => x.Kind == "tls" && x.Expires.HasValue &&
-            x.State is "即将到期" or "已过期"))
+            ObservationState.Current(x) is "即将到期" or "证书已过期"))
         {
             var remain = (item.Expires!.Value - DateTimeOffset.Now).TotalDays;
             var threshold = new[] { 0, 3, 7, 14, 30 }.FirstOrDefault(x => remain <= x);
@@ -141,12 +135,13 @@ public partial class MainWindow : Window
             if (!_store.MarkNotice(key)) continue;
             var website = WebProbe.Targets(_store).FirstOrDefault(x => x.Id == item.Id);
             if (website != null) _tray?.Notice("VPSnode · 证书提醒",
-                $"{website.Name} · {website.Location} · {item.State}");
+                $"{website.Name} · {website.Location} · {ObservationState.Current(item)}");
         }
     }
 
     private void RefreshIfChanged()
     {
+        Ui.Theme(_store.Settings.Theme);
         if (System.Windows.Input.Keyboard.FocusedElement is TextBox { SelectionLength: > 0 } || System.Windows.Input.Mouse.LeftButton == System.Windows.Input.MouseButtonState.Pressed) return;
         if (_page == "settings" || OwnedWindows.OfType<Window>().Any(window => window.IsVisible)) return;
         var version = Convert.ToInt64(_changes.ExecuteScalar());
@@ -188,7 +183,7 @@ public partial class MainWindow : Window
         {
             _manualRun = null;
             _current = null;
-            if (!_closing) RefreshVisibleData();
+            if (!_closing) { RefreshSharedTasks(); RefreshVisibleData(); }
         }
     }
 
@@ -232,7 +227,6 @@ public partial class MainWindow : Window
         _nodeRows.Clear();
         _nodeSummaries.Clear();
         _nodeCancel = null;
-        _intervalMinutes = _store.Settings.IntervalMinutes;
         UpdateTaskPanel();
         Navigation.Children.Clear();
         foreach (var (key, name) in _menu)
@@ -278,7 +272,7 @@ public partial class MainWindow : Window
     private static bool IsPaused(Node n) => n.Paused || n.SourceRemoved && !n.VpsVerified && !n.Manual;
     private static bool IsPanelDisabled(Node n) =>
         n.Server.GetValueOrDefault("启用") == "否" || n.Server.GetValueOrDefault("客户端启用") == "否";
-    private bool IsCurrent(Observation? value, string state) => value?.State == state && !IsStale(value);
+    private bool IsCurrent(Observation? value, string state) => value != null && ObservationState.Current(value) == state;
     private bool IsNodeAvailable(Node n, Observation? value) =>
         !IsPaused(n) && !IsPanelDisabled(n) && IsCurrent(value, "可用");
 
@@ -290,23 +284,17 @@ public partial class MainWindow : Window
         return State(latest);
     }
 
-    private bool IsStale(Observation value)
-    {
-        var age = value.Kind == "tls" ? TimeSpan.FromDays(2) : TimeSpan.FromMinutes(_intervalMinutes * 2d + 1);
-        return value.Kind is "host" or "node" or "web80" or "web443" or "tls" && DateTimeOffset.Now - value.At > age;
-    }
-
     private string State(Observation? value)
     {
         if (value is null) return "○ 待检测";
-        var name = value.State;
+        var name = ObservationState.Current(value);
         var state = name switch
         {
             "SSH 可登录" or "正常" or "可用" or "完成" or "TLS 正常" or "解析正常" or "有网页" or "跳转后有网页" => "✓ " + name,
             "即将到期" or "未检测" or "依赖缺失" or "参数待验证" or "待补全" => "◇ " + name,
             _ => "! " + name
         };
-        return IsStale(value) ? (state.StartsWith("✓", StringComparison.Ordinal) ? "◇ 上次" + name : state) + " · 已过时" : state;
+        return state;
     }
 
     private static ComboBox Choice(object[] values, object? selected, Action<int> change)
@@ -342,7 +330,7 @@ public partial class MainWindow : Window
         var nodeOk = nodes.Count(n => IsNodeAvailable(n, data.GetValueOrDefault(("node", n.Id))));
         var failed = websites.Count(w => w.Enabled && w.CheckWebsite && new[] { "web80", "web443" }
             .Any(k => data.TryGetValue((k, w.Id), out var check) && check.State is not ("有网页" or "跳转后有网页")));
-        var expiring = websites.Count(w => data.GetValueOrDefault(("tls", w.Id))?.State is "即将到期" or "已过期");
+        var expiring = websites.Count(w => data.GetValueOrDefault(("tls", w.Id)) is Observation cert && ObservationState.Current(cert) is "即将到期" or "证书已过期");
         Button Tile(string label, string icon, int count, int total, string dest, bool alert = false, bool certificates = false)
         {
             var button = Ui.Button(label, () => Navigate(dest, () => { if (dest == "web") _webCertificates = certificates; }));

@@ -17,29 +17,103 @@ public sealed class Monitor
     public async Task<T> Maintain<T>(Func<T> action, CancellationToken token)
     {
         await _gate.WaitAsync(token);
-        try { token.ThrowIfCancellationRequested(); return action(); }
+        try { using var execution = await _store.ExecutionLock(token); token.ThrowIfCancellationRequested(); return action(); }
         finally { _gate.Release(); }
     }
 
     public async Task Delete(string kind, string id, CancellationToken token)
     {
         await _gate.WaitAsync(token);
-        try { _store.Delete(kind, id); }
+        try { using var execution = await _store.ExecutionLock(token); _store.Delete(kind, id); }
         finally { _gate.Release(); }
     }
 
     public async Task<string> Run(string kind, string targetId, CancellationToken token, Action? started = null)
     {
-        try { await _gate.WaitAsync(token); }
+        var task = _store.SubmitTask(kind, targetId, "手动");
+        using var registration = token.Register(() => _store.CancelTask(task.Id));
+        try { await Drain(token, task.Id, started); }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            var skipped = Plan(kind, targetId).Select(w => new InspectionItem(w.Kind, w.Id, w.Name, "跳过", "等待执行期间已取消")).ToArray();
-            var canceled = new Inspection(kind, "手动", DateTimeOffset.Now, "已取消", skipped);
-            _store.Record(new("task", "history", DateTimeOffset.Now, canceled.State, Wire.Encode(canceled)));
+            var current = _store.GetTask(task.Id)!;
+            if (current.Result is null)
+            {
+                var skipped = Plan(kind, targetId).Select(w => new InspectionItem(w.Kind, w.Id, w.Name, "跳过", "等待执行期间已取消")).ToArray();
+                var result = new Inspection(kind, current.Source, DateTimeOffset.Now, "已取消", skipped, task.Id);
+                _store.UpdateTask(current with { State = "canceled", Result = result, ErrorCode = "canceled", Error = "等待执行期间已取消" });
+                _store.Record(new("task", "history", DateTimeOffset.Now, result.State, Wire.Encode(result)));
+            }
             throw;
         }
-        try { started?.Invoke(); return await Execute(kind, targetId, token); }
+        var final = _store.GetTask(task.Id)!;
+        return final.Result?.Summary ?? final.Error;
+    }
+
+    public async Task Drain(CancellationToken token, string untilId = "", Action? started = null)
+    {
+        await _gate.WaitAsync(token);
+        try
+        {
+            using var execution = await _store.ExecutionLock(token);
+            _store.RecoverInterruptedTasks();
+            _store.PromoteRequests();
+            await DrainLocked(token, untilId, started);
+        }
         finally { _gate.Release(); }
+    }
+
+    private async Task DrainLocked(CancellationToken token, string untilId = "", Action? started = null)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            if (untilId.Length > 0 && _store.GetTask(untilId)?.Terminal == true) return;
+            var task = _store.Tasks.Where(t => t.State == "queued").OrderBy(t => t.Created).FirstOrDefault();
+            if (task is null) return;
+            if (untilId.Length == 0 || task.Id == untilId) started?.Invoke();
+            await ExecuteTask(task, token);
+        }
+    }
+
+    private async Task ExecuteTask(InspectionTask task, CancellationToken token)
+    {
+        task = task with { State = "running", ExecutorPid = Environment.ProcessId };
+        _store.UpdateTask(task);
+        using var poll = new CancellationTokenSource();
+        using var execution = CancellationTokenSource.CreateLinkedTokenSource(token);
+        async Task WatchCancellation()
+        {
+            try
+            {
+                while (true)
+                {
+                    if (_store.GetTask(task.Id)?.CancelRequested == true) { execution.Cancel(); return; }
+                    await Task.Delay(100, poll.Token);
+                }
+            }
+            catch (OperationCanceledException) when (poll.IsCancellationRequested) { }
+        }
+        var watcher = WatchCancellation();
+        void Progress(Inspection inspection) => _store.UpdateTask(task with { State = "running", Result = inspection });
+        Changed += Progress;
+        try
+        {
+            await Execute(task.Kind, task.TargetId, execution.Token, task.Source, task.Id);
+            var current = _store.GetTask(task.Id)!;
+            var result = current.Result!;
+            var canceled = result.State == "已取消";
+            var failed = result.Failed > 0 || result.Items.Length == 0 || result.Success == 0 && result.Skipped > 0;
+            _store.UpdateTask(current with { State = canceled ? "canceled" : failed ? "failed" : "completed",
+                ErrorCode = canceled ? "canceled" : failed ? "inspection_failed" : "",
+                Error = canceled ? "任务已取消" : failed ? string.Join(" · ", result.Items.Where(i => i.State != "成功").Select(i => i.Detail).Distinct()) : "" });
+        }
+        catch (Exception ex)
+        {
+            var current = _store.GetTask(task.Id)!;
+            _store.UpdateTask(current with { State = execution.IsCancellationRequested ? "canceled" : "failed",
+                ErrorCode = execution.IsCancellationRequested ? "canceled" : "executor_error",
+                Error = execution.IsCancellationRequested ? "任务已取消" : $"检测未完成（{ex.GetType().Name}）" });
+        }
+        finally { Changed -= Progress; poll.Cancel(); await watcher; }
     }
 
     public async Task Tick(CancellationToken token)
@@ -47,6 +121,11 @@ public sealed class Monitor
         if (!await _gate.WaitAsync(0, token)) return;
         try
         {
+            using var execution = _store.TryExecutionLock();
+            if (execution is null) return;
+            _store.RecoverInterruptedTasks();
+            _store.PromoteRequests();
+            await DrainLocked(token);
             var now = DateTimeOffset.Now;
             var settings = _store.Settings;
             if (now - _lastCleanup >= TimeSpan.FromHours(24))
@@ -65,18 +144,14 @@ public sealed class Monitor
                 _offline = true;
                 return;
             }
-            for (int i = 0; i < 12 && _store.Peek() is Request request; i++)
-            {
-                await Execute(request.Kind, request.TargetId, token, "任务队列");
-                _store.Finish(request);
-            }
             // Reload after queued work: settings may have changed while a probe was running.
             settings = _store.Settings;
             if (!settings.ScheduledInspectionEnabled) { _offline = false; return; }
             if (!_offline && now - _lastTick < TimeSpan.FromMinutes(Math.Clamp(settings.IntervalMinutes, 2, 1440))) return;
             _offline = false;
             _lastTick = now;
-            await Execute("scheduled", "", token, "定时");
+            var scheduled = _store.SubmitTask("scheduled", "", "定时");
+            await ExecuteTask(scheduled, token);
         }
         finally { _gate.Release(); }
     }
@@ -104,10 +179,11 @@ public sealed class Monitor
 
     public void CancelActive()
     {
+        foreach (var task in _store.Tasks.Where(t => t.State == "running")) _store.CancelTask(task.Id);
         lock (_stateLock) _active?.Cancel();
     }
 
-    private async Task<string> Execute(string kind, string id, CancellationToken outer, string source = "手动")
+    private async Task<string> Execute(string kind, string id, CancellationToken outer, string source = "手动", string taskId = "")
     {
         var plan = Plan(kind, id).ToArray();
         if (plan.Length == 0 && kind is "node" or "speed" or "sni" or "host" or "inventory" or "web")
@@ -116,7 +192,7 @@ public sealed class Monitor
         var started = DateTimeOffset.Now;
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(outer);
         lock (_stateLock) _active = cancel;
-        Inspection Snapshot(string state) => new(kind, source, started, state, [.. items]);
+        Inspection Snapshot(string state) => new(kind, source, started, state, [.. items], taskId);
         try
         {
             Changed?.Invoke(Snapshot("运行中"));
@@ -163,13 +239,13 @@ public sealed class Monitor
         if (sweep || kind is "node" or "speed" or "speeds" or "sni" or "nodes" or "host-nodes")
             foreach (var n in _store.Nodes.Where(n => sweep || kind is "nodes" or "speeds" || (kind == "host-nodes" ? n.HostId == id : n.Id == id)))
                 yield return new(kind == "speeds" ? "speed" : kind is "speed" or "sni" ? kind : "node", n.Id, n.Name, Node: n);
-        if (sweep || kind is "websites" or "web")
+        if (sweep || kind is "websites" or "web" or "tls")
         {
             var latest = _store.Latest();
-            foreach (var w in WebProbe.Targets(_store).Where(w => kind == "web" ? w.Id == id : w.Enabled))
+            foreach (var w in WebProbe.Targets(_store).Where(w => kind is "web" or "tls" ? w.Id == id : w.Enabled))
             {
                 var cert = latest.GetValueOrDefault(("tls", w.Id));
-                yield return new("web", w.Id, w.Name, Web: w, Certificate: kind != "scheduled" || cert is null || DateTimeOffset.Now - cert.At >= TimeSpan.FromDays(1));
+                yield return new(kind == "tls" ? "tls" : "web", w.Id, w.Name, Web: w, Certificate: kind != "scheduled" || cert is null || DateTimeOffset.Now - cert.At >= TimeSpan.FromDays(1));
             }
         }
     }
@@ -180,7 +256,7 @@ public sealed class Monitor
         if (work.Host is Host host)
             results = [await SshInventory.Probe(_store, host, work.Kind == "inventory", token)];
         else if (work.Web is WebTarget web)
-            results = await WebProbe.Run(web, work.Certificate, token);
+            results = work.Kind == "tls" ? [await WebProbe.Tls("tls", web.Id, WebProbe.Address(web), web.Port, WebProbe.Name(web), web.Location, token)] : await WebProbe.Run(web, work.Certificate, token);
         else if (work.Node is Node node)
         {
             if (node.Paused || node.SourceRemoved && !node.VpsVerified && !node.Manual)
@@ -215,7 +291,7 @@ public sealed class Monitor
 }
 
 public sealed record InspectionItem(string Kind, string Id, string Name, string State, string Detail);
-public sealed record Inspection(string Kind, string Source, DateTimeOffset Started, string State, InspectionItem[] Items)
+public sealed record Inspection(string Kind, string Source, DateTimeOffset Started, string State, InspectionItem[] Items, string TaskId = "")
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public int Success => Items.Count(i => i.State == "成功");

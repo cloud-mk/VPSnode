@@ -53,6 +53,13 @@ public sealed partial class Store
         var merged = NodeIdentity.Merge(keep, remove, associate: true);
         if (confirmed) merged = merged with { Sources = merged.Sources.Select(s => s with { Confirmed = true }).ToArray() };
         Put(db, tx, "node", keep.Id, merged);
+        foreach (var job in List<InspectionTask>(db, tx, "inspection-task"))
+        {
+            var nodeTask = job.Kind is "node" or "speed" or "sni";
+            var result = job.Result is null ? null : job.Result with { Items = job.Result.Items.Select(i =>
+                i.Id == remove.Id && i.Kind is "node" or "speed" or "sni" ? i with { Id = keep.Id } : i).ToArray() };
+            Put(db, tx, "inspection-task", job.Id, job with { TargetId = nodeTask && job.TargetId == remove.Id ? keep.Id : job.TargetId, Result = result });
+        }
         foreach (var web in List<WebTarget>(db, tx, "web"))
             if (web.FallbackNodeIds.Contains(remove.Id) || web.CertificateNodeIds.Contains(remove.Id))
                 Put(db, tx, "web", web.Id, web with

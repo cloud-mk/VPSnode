@@ -49,4 +49,12 @@ public static class Validation
             !Port(value.Port) || (value.Url.Length == 0 && value.Domain.Length == 0 && value.Sni.Length == 0))
             throw new InvalidDataException("请检查 URL、域名、证书连接地址或端口。");
     }
+
+    public static void Settings(Settings value)
+    {
+        if (value.Theme is not ("light" or "dark") || value.IntervalMinutes is < 2 or > 1440 ||
+            value.HistoryDays is < 1 or > 365 || value.SpeedBytes is < 100_000 or > 100_000_000 ||
+            value.PingStatus is < 100 or > 599 || !WebUrl(value.PingUrl) || !WebUrl(value.SpeedUrl) || value.FollowGroups is null)
+            throw new InvalidDataException("设置无效：间隔 2–1440 分钟、历史 1–365 天、下载 0.1–100 MB、状态码 100–599、有效 HTTP(S) URL 与 light/dark 主题。");
+    }
 }

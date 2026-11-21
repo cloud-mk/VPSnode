@@ -21,7 +21,7 @@ internal sealed class StatusPill : Border
     private void Update()
     {
         var label = Value ?? "";
-        var tone = label.Contains("已过时") ? "Warn" : label.StartsWith("✓") ? "Good" :
+        var tone = label.StartsWith("✓") ? "Good" :
             label.StartsWith("!") ? "Bad" : label.StartsWith("◇") ? "Warn" : "Quiet";
         Ui.Brush(this, BackgroundProperty, tone + "Fill");
         var text = Ui.Value(label, 13, true);

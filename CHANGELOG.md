@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11 — 2026-11-21
+
+- Complete the local Agent workflow across assets, SSH metadata, sources, duplicate associations, configuration, settings, backups and inspection history, reusing Core validation and encrypted storage.
+- Persist task IDs, queued/running/completed/failed/canceled states, progress, item results and error reasons. Run a detached short-lived local worker when the GUI is absent; use one cross-process execution lock and durable cancellation for both entry points.
+- Avoid inherited stdout handles delaying Agent submission receipts. Recover interrupted executors explicitly instead of leaving tasks running indefinitely.
+- Protect explicit field updates and reject stale GUI asset edits; keep inventory merge semantics separate. Mask credentials by default and require explicit configuration/export disclosure.
+- Apply shared header-only separators to every DataGrid, retain native resize grips and node column coordination, and align identical overview tables. Preserve manual widths and measure action buttons to prevent clipped labels.
+- Remove observation-age decay from labels, colors, availability counts and anomaly filters. Preserve raw observations/timestamps and actual certificate expiry/reminder deduplication.
+- Clarify independent GUI use and Agent enhancement in both READMEs. Add CLI contract tests and real Xray cross-process cancellation/crash tests; document actual validation boundaries.
+
 ## 0.1.10 — 2026-11-21
 
 - Update node progress and observations in place instead of rebuilding the page at task start, progress, completion or periodic refresh.

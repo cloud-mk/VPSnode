@@ -120,6 +120,12 @@ internal static class Ui
         }
         if (actions.Length > 0)
         {
+            var actionWidth = actions.Sum(a =>
+            {
+                var label = new TextBlock { Text = a.Label, FontSize = 14 };
+                label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return Math.Max(49, label.DesiredSize.Width + 24);
+            });
             var row = new FrameworkElementFactory(typeof(StackPanel));
             row.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
             row.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
@@ -137,7 +143,7 @@ internal static class Ui
             }
             grid.Columns.Add(new DataGridTemplateColumn
             {
-                Header = "操作", Width = DataGridLength.SizeToCells, MinWidth = actions.Length * 49 + 4,
+                Header = "操作", Width = DataGridLength.SizeToCells, MinWidth = actionWidth + 4,
                 CellTemplate = new DataTemplate { VisualTree = row }
             });
         }
@@ -169,6 +175,7 @@ internal static class Ui
             }
         };
         grid.Loaded += FitAfterLayout;
+        grid.Loaded += (_, _) => SharedTableColumns.Attach(grid);
         return grid;
     }
 
@@ -192,17 +199,31 @@ internal static class Ui
         var flexible = grid.Columns.Where(c => c.Width.IsStar).Select(c => (Column: c, Weight: c.Width.Value)).ToArray();
         if (flexible.Length == 0) return;
         var fixedColumns = grid.Columns.Except(flexible.Select(f => f.Column)).ToArray();
-        var weightSum = flexible.Sum(f => f.Weight);
+        var manual = new HashSet<DataGridColumn>();
+        var fitting = false;
         void Fit()
         {
             var scroller = grid.Template.FindName("DG_ScrollViewer", grid) as ScrollViewer;
             var viewport = scroller?.ViewportWidth is > 0 ? scroller.ViewportWidth : grid.ActualWidth - 3;
-            var available = viewport - fixedColumns.Sum(c => Math.Max(c.MinWidth, c.ActualWidth));
-            var extra = Math.Max(0, available - flexible.Sum(f => f.Column.MinWidth));
-            foreach (var (column, weight) in flexible)
-                column.Width = new DataGridLength(column.MinWidth + Math.Floor(extra * weight / weightSum));
+            bool IsManual(DataGridColumn column) => manual.Contains(column) || SharedTableColumns.IsManual(grid, column);
+            var available = viewport - fixedColumns.Sum(c => Math.Max(c.MinWidth, c.ActualWidth)) - flexible.Where(f => IsManual(f.Column)).Sum(f => f.Column.Width.Value);
+            var automatic = flexible.Where(f => !IsManual(f.Column)).ToArray();
+            var extra = Math.Max(0, available - automatic.Sum(f => f.Column.MinWidth));
+            var weightSum = automatic.Sum(f => f.Weight);
+            fitting = true;
+            grid.SetValue(SharedTableColumns.AutoFitProperty, true);
+            try
+            {
+                foreach (var (column, weight) in automatic)
+                    column.Width = new DataGridLength(column.MinWidth + (weightSum == 0 ? 0 : Math.Floor(extra * weight / weightSum)));
+            }
+            finally { fitting = false; grid.SetValue(SharedTableColumns.AutoFitProperty, false); }
         }
         Fit();
+        var descriptor = System.ComponentModel.DependencyPropertyDescriptor.FromProperty(DataGridColumn.WidthProperty, typeof(DataGridColumn))!;
+        var handlers = flexible.Select(f => (f.Column, Handler: new EventHandler((_, _) => { if (!fitting && !SharedTableColumns.IsApplying(grid)) manual.Add(f.Column); }))).ToArray();
+        foreach (var (column, handler) in handlers) descriptor.AddValueChanged(column, handler);
+        grid.Unloaded += (_, _) => { foreach (var (column, handler) in handlers) descriptor.RemoveValueChanged(column, handler); };
         grid.SizeChanged += (_, e) => { if (e.WidthChanged || e.HeightChanged) Fit(); };
     }
 

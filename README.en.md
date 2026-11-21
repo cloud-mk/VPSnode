@@ -1,8 +1,14 @@
 # VPSnode
 
-A local Windows application for managing VPS hosts, proxy nodes, websites, and certificates.
+A beginner-friendly Windows VPS and proxy manager with an agent-ready CLI, turning network operations into a visual, verifiable inventory.
 
-Keep configuration sources, asset relationships, and inspection history together in a searchable network asset inventory.
+**Beginner-friendly · Visual · Agent-friendly · Verifiable.** Use the GUI independently, or let an Agent maintain the same inventory through the CLI. Configuration sources, relationships, timestamps, and inspection history remain visible for review.
+
+- **Proxy users:** no VPS required. Import share links or local v2rayN nodes, run tests, inspect configurations, and manage records through the GUI without learning command-line tools.
+- **VPS users:** add a host or SSH alias with simple graphical controls. Collect readable host, inbound, and listening-port information, then manage related websites, certificates, and results.
+- **Agent users:** deploy and maintain remote services through SSH, existing panels, or other tools; use VPSnode CLI to record assets, run checks, and read results. The GUI makes that work understandable and reviewable by ordinary users.
+
+An agent-friendly Windows network asset manager that turns AI-assisted VPS operations into a visual, verifiable inventory. VPSnode focuses on local inventory and inspection rather than remote deployment orchestration.
 
 [简体中文](README.md) · [Downloads](https://github.com/cloud-mk/VPSnode/releases) · [Issues](https://github.com/cloud-mk/VPSnode/issues)
 
@@ -47,6 +53,15 @@ Full backups use AES-256-GCM encryption and PBKDF2-SHA256 password derivation, w
 Share links, QR codes, and individual node configuration exports may contain credentials. Remove server addresses, domains, UUIDs, passwords, private keys, and other personal information before sharing reports or screenshots. Public examples contain fictional data only.
 
 Checks connect to your configured servers, websites, and test endpoints. Download tests consume traffic. Batch downloads run sequentially, with a 45-second limit per node and the configured byte limit.
+
+## What's new in 0.1.11
+
+- The CLI covers all existing business categories: asset CRUD, source synchronization, configuration and duplicate review, settings, encrypted backup and restore, using the same Core and database as the GUI.
+- Checks now provide durable task IDs, progress, final results, error reasons, cancellation, and history. A short-lived local worker runs without the GUI; shared execution locking prevents overlapping probes. No HTTP service or new listener is added.
+- Shared tables use subtle separators only between column headers, preserving native resizing and the existing stable node list.
+- Display the latest recorded result and timestamp without age-based decay. Actual certificate expiration and reminders remain active.
+
+[Agent guide](docs/agent-cli.md) · [Coverage and defect analysis](docs/coverage-0.1.11.md) · [Validation scope](docs/validation-0.1.11.md).
 
 ## What's new in 0.1.10
 
@@ -93,7 +108,7 @@ Choose a fresh output directory. MSI packaging additionally requires WiX 5; spec
 
 ## Limitations and feedback
 
-See the precise [0.1.10 validation scope](docs/validation-0.1.10.md). Physical multi-monitor DPI transitions, cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended operation remain unverified. Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
+See the precise [0.1.11 validation scope](docs/validation-0.1.11.md). Physical multi-monitor DPI transitions, cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended operation remain unverified. Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
 
 Please include the application version, reproduction steps, expected behavior, and sanitized error details when opening an issue. Do not upload real asset databases, backups, private keys, or share links.
 

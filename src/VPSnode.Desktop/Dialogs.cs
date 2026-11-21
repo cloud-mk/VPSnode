@@ -168,7 +168,7 @@ public partial class MainWindow
                 SshPort = Integer(f["port"], 1, 65535, "SSH 端口"), PasswordCipher = f["password"], KeyPath = f["key"], Hostname = f["hostname"],
                 Hardware = f["hardware"], Provider = f["provider"], PanelPath = f["panel"], Notes = f["notes"],
                 TunnelPort = f["tunnel"].Length == 0 ? null : Integer(f["tunnel"], 1, 65535, "隧道端口")
-            });
+            }, old);
             OpenHost(host.Id);
         }
         catch (Exception ex) { Fail(ex); }
@@ -196,20 +196,9 @@ public partial class MainWindow
             box.Children.Add(Ui.Row(save, cancel));
             if (dialog.ShowDialog() != true) return;
             var candidate = await SshInventory.FromAlias(picker.Text.Trim(), _app.Token);
-            var hosts = _store.Hosts;
-            var old = hosts.FirstOrDefault(h => h.Id == candidate.Id || h.SshAlias == candidate.SshAlias);
-            if (old is null)
-            {
-                var direct = hosts.Where(h => h.SshAlias.Length == 0 && h.SshPort == candidate.SshPort &&
-                    h.Address.Equals(candidate.Address, StringComparison.OrdinalIgnoreCase) && h.User == candidate.User).ToArray();
-                if (direct.Length == 1) old = direct[0];
-            }
-            if (old != null)
-            {
-                candidate = candidate with { Id = old.Id, Name = old.Name, Enabled = old.Enabled };
-            }
-            var imported = _store.Import(new(1, [candidate], [], []), true, enqueue: false);
-            if (imported.Conflicts.Length > 0) throw new InvalidDataException(imported.Conflicts[0]);
+            var result = await Task.Run(() => _monitor.Maintain(() => _store.ImportSshAlias(candidate), _app.Token));
+            candidate = result.Host;
+            if (result.Summary.Conflicts.Length > 0) throw new InvalidDataException(result.Summary.Conflicts[0]);
             OpenHost(candidate.Id);
             StartInventory(candidate.Id);
         }
@@ -357,7 +346,7 @@ public partial class MainWindow
                     Notes = notes.Text.Trim(), IpMode = (string?)mode.SelectedItem ?? "auto", Paused = pause.IsChecked == true,
                     Manual = true, SourceRemoved = false, Server = serverFields, Related = relatedFields
                 });
-                _store.Save(updated);
+                _store.Save(updated, n);
                 window.DialogResult = true;
             }
             catch (Exception ex) { Fail(ex); }
@@ -368,6 +357,7 @@ public partial class MainWindow
     private void EditWebsite(WebTarget? current)
     {
         var site = current ?? new WebTarget { Id = Id(), Name = "" };
+        var persisted = _store.Websites.FirstOrDefault(w => w.Id == site.Id);
         var host = HostChoice(site.HostId);
         var body = Ui.Stack();
         TextBox Input(StackPanel parent, string label, string value)
@@ -430,7 +420,7 @@ public partial class MainWindow
             try
             {
                 var chosen = choices.Where(x => nodes.Children.Contains(x.Box) && x.Box.IsChecked == true);
-                _store.Save(site with
+                var updated = site with
                 {
                     Name = Field(name.Text.Trim(), Field(domain.Text.Trim(), sni.Text.Trim())), Domain = domain.Text.Trim(),
                     HostId = host.Id(), FallbackNodeIds = chosen.Select(x => x.Node.Id).ToArray(), AutoFallbackNodeIds = [],
@@ -438,7 +428,9 @@ public partial class MainWindow
                     Sni = sni.Text.Trim(), Location = Field(location.Text.Trim(), "公网"), Url = url.Text.Trim(),
                     Contains = keyword.Text.Trim(), ExpectedStatus = expect.Text.Trim().Length == 0 ? null :
                         Integer(expect.Text.Trim(), 100, 599, "状态码")
-                });
+                };
+                if (persisted == null) _store.Save(updated);
+                else _store.Save(updated, persisted);
                 dialog.DialogResult = true;
             }
             catch (InvalidDataException ex) { error.Text = ex.Message; }
@@ -555,7 +547,8 @@ public partial class MainWindow
             }, true), Ui.Button("保存自动跟随", () =>
             {
                 var follow = rows.Where(x => x.follow.IsChecked == true).Select(x => x.g.Id).ToArray();
-                _store.Save(_store.Settings with { FollowGroups = follow });
+                using var patch = System.Text.Json.JsonDocument.Parse(Wire.Encode(new { followGroups = follow }));
+                _store.EditSettings(patch.RootElement);
                 result.Text = follow.Length == 0 ? "自动跟随已关闭。" : $"已为 {follow.Length} 个分组开启自动跟随。";
             }), Ui.Button("关闭", () => window.Close())));
             window.ShowDialog();

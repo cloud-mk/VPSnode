@@ -113,7 +113,7 @@ public sealed partial class Store
     public Node[] Nodes => List<Node>("node");
     public WebTarget[] Websites => List<WebTarget>("web");
 
-    public void Save(Settings value) => Put("settings", "main", value);
+    public void Save(Settings value) { Validation.Settings(value); Put("settings", "main", value); }
     public void Save(Host value) { Validation.Host(value); Put("host", value.Id, value); }
     public void Save(Node value) { Validation.Node(value); Put("node", value.Id, value); }
     public void Save(WebTarget value) { Validation.Web(value); Put("web", value.Id, WebProbe.ForStorage(value)); }
@@ -173,6 +173,9 @@ public sealed partial class Store
         }
         using var q = Command(db, tx, "DELETE FROM assets WHERE kind=$k AND id=$i", ("$k", kind), ("$i", id));
         q.ExecuteNonQuery();
+        foreach (var task in List<InspectionTask>(db, tx, "inspection-task").Where(t => !t.Terminal && t.TargetId == id && kinds.Contains(t.Kind)))
+            Put(db, tx, "inspection-task", task.Id, task with { State = "canceled", CancelRequested = true,
+                ErrorCode = "target_deleted", Error = "目标已删除", Updated = DateTimeOffset.UtcNow });
         tx.Commit();
     }
 
@@ -237,6 +240,11 @@ public sealed partial class Store
         using var q = Command(db, null, "DELETE FROM observations WHERE time < $t",
             ("$t", Stamp(DateTimeOffset.UtcNow.AddDays(-Math.Clamp(days, 1, 365)))));
         q.ExecuteNonQuery();
+        foreach (var task in Tasks.Where(t => t.Terminal && t.Updated < DateTimeOffset.UtcNow.AddDays(-Math.Clamp(days, 1, 365))))
+        {
+            using var remove = Command(db, null, "DELETE FROM assets WHERE kind='inspection-task' AND id=$i", ("$i", task.Id));
+            remove.ExecuteNonQuery();
+        }
     }
 
     public bool MarkNotice(string id)

@@ -29,7 +29,6 @@ public partial class MainWindow
     private void RefreshVisibleData()
     {
         if (_page != "nodes") { Render(); return; }
-        _intervalMinutes = _store.Settings.IntervalMinutes;
         var nodes = MatchingNodes(); var hosts = _store.Hosts.OrderBy(h => h.Name).ToArray();
         if (!_nodeLayout.SequenceEqual(NodeLayout(nodes, hosts))) { Render(); return; }
         var hostIndex = hosts.ToDictionary(h => h.Id);
@@ -125,6 +124,7 @@ internal sealed class SharedNodeColumns
 
     internal void Attach(DataGrid grid)
     {
+        grid.SetValue(SharedTableColumns.ManagedProperty, true);
         for (int i = 0; i < Minimum.Length; i++)
         {
             var index = i; var column = grid.Columns[i];
@@ -136,14 +136,6 @@ internal sealed class SharedNodeColumns
             };
             WidthProperty.AddValueChanged(column, changed); _subscriptions.Add((column, changed));
         }
-        var style = new Style(typeof(System.Windows.Controls.Primitives.DataGridColumnHeader),
-            (Style)Application.Current.FindResource(typeof(System.Windows.Controls.Primitives.DataGridColumnHeader)));
-        style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0, 0, 1, 0)));
-        var last = new DataTrigger { Binding = new System.Windows.Data.Binding("Column.DisplayIndex") {
-            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.Self) }, Value = Minimum.Length - 1 };
-        last.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
-        style.Triggers.Add(last);
-        grid.ColumnHeaderStyle = style;
         _grids.Add(grid); ApplyOrder(grid);
         grid.ColumnReordered += Reordered;
         grid.Loaded += Loaded;

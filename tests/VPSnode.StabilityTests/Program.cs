@@ -104,6 +104,7 @@ internal static class Program
             {
                 typeof(MainWindow).Assembly.GetType("VPSnode.Desktop.Ui")!.GetMethod("Theme", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [theme]); Pump();
                 var headers = Walk(Grids()[0]).OfType<DataGridColumnHeader>().Where(h => h.Column != null).ToArray();
+                Console.WriteLine("Header borders: " + string.Join("; ", headers.Select(h => $"{h.Column.DisplayIndex}/{Grids()[0].Columns.Count}={h.BorderThickness}")));
                 Check(headers.Take(headers.Length - 1).All(h => h.BorderThickness.Right == 1) && headers.Last().BorderThickness.Right == 0, "header-only interior separators " + theme);
                 Check(Walk(headers[0]).OfType<Thumb>().Any(t => t.Cursor == System.Windows.Input.Cursors.SizeWE), "native resize grip and cursor retained " + theme);
                 foreach (var scale in new[] { 1d, 1.5d })
@@ -115,6 +116,46 @@ internal static class Program
                 }
             }
             CheckReview(window, Call, Pump);
+            store.Save(new WebTarget { Id = "fictional-web", Name = "示例网站", Domain = "site.example.org", HostId = "a", FallbackNodeIds = ["n00"] });
+            var past = DateTimeOffset.Now.AddDays(-10);
+            store.Record(new("host", "a", past, "SSH 可登录"));
+            store.Record(new("node", "n00", past, "可用", Value: 80));
+            store.Record(new("web80", "fictional-web", past, "有网页"));
+            store.Record(new("tls", "fictional-web", past, "TLS 正常", Expires: DateTimeOffset.Now.AddMinutes(-1)));
+            foreach (var theme in new[] { "light", "dark" })
+            {
+                typeof(MainWindow).Assembly.GetType("VPSnode.Desktop.Ui")!.GetMethod("Theme", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [theme]);
+                foreach (var pageName in new[] { "overview", "hosts", "web", "tasks" })
+                {
+                    Page(pageName); Pump();
+                    foreach (var table in Grids())
+                    {
+                        var headers = Walk(table).OfType<DataGridColumnHeader>().Where(h => h.Column != null).ToArray();
+                        Check(headers.All(h => h.BorderThickness.Right == (h.DisplayIndex < table.Columns.Count - 1 ? 1 : 0)), $"shared header separators {pageName}/{theme}");
+                        Check(table.GridLinesVisibility == DataGridGridLinesVisibility.None && Walk(table).OfType<DataGridCell>().All(c => c.BorderThickness == new Thickness(0)), $"no data-row vertical lines {pageName}/{theme}");
+                    }
+                    if (pageName == "overview")
+                    {
+                        var tables = Grids(); tables[0].Columns[0].Width = 260; Pump();
+                        Check(tables.All(t => Math.Abs(t.Columns[0].ActualWidth - 260) < .5), "same-schema overview tables share dragged widths " + theme);
+                    }
+                    var visual = (FrameworkElement)window.Content;
+                    var bitmap = new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth), (int)Math.Ceiling(visual.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(visual); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                    using var file = File.Create(Path.Combine(root, $"{pageName}-{theme}.png")); png.Save(file);
+                }
+                foreach (var observation in new[] { new Observation("node", "n00", past, "可用"), new("host", "a", past, "SSH 可登录"), new("web80", "fictional-web", past, "有网页"), new("tls", "fictional-web", past, "TLS 正常", Expires: DateTimeOffset.Now.AddDays(60)) })
+                {
+                    var label = (string)typeof(MainWindow).GetMethod("State", Private)!.Invoke(window, [observation])!;
+                    Check(label.StartsWith("✓") && !label.Contains("过时"), "old success keeps good state " + observation.Kind + "/" + theme);
+                    var pill = (Border)Activator.CreateInstance(typeof(MainWindow).Assembly.GetType("VPSnode.Desktop.StatusPill")!)!;
+                    pill.GetType().GetProperty("Value")!.SetValue(pill, label);
+                    Check(Equals(pill.Background, app.FindResource("GoodFill")), "old success keeps good color " + observation.Kind + "/" + theme);
+                }
+                Check(((string)typeof(MainWindow).GetMethod("State", Private)!.Invoke(window, [store.Latest()[("tls", "fictional-web")]])!).Contains("证书已过期"), "real expiration retains warning " + theme);
+                var expired = store.Latest()[("tls", "fictional-web")];
+                Check(expired.State == "TLS 正常" && expired.At == past, "rendering preserves original result and timestamp");
+            }
             Console.WriteLine("PASS stability suite: actual WPF controls and Dispatcher, not OS mouse or physical DPI validation");
         }
         finally

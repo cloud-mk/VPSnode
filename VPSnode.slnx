@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="tests/VPSnode.AgentTests/VPSnode.AgentTests.csproj" />
   <Project Path="src/VPSnode.Core/VPSnode.Core.csproj" />
   <Project Path="src/VPSnode.Cli/VPSnode.Cli.csproj" />
   <Project Path="src/VPSnode.Desktop/VPSnode.Desktop.csproj" />

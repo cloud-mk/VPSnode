@@ -15,6 +15,14 @@ public partial class MainWindow
     private Inspection? _pendingTask;
     private int _updatePending;
 
+    private void RefreshSharedTasks()
+    {
+        var tasks = _store.Tasks;
+        _runningTask = tasks.FirstOrDefault(t => t.State == "running")?.Result;
+        _recentTask = TaskHistory(1).FirstOrDefault();
+        UpdateTaskPanel();
+    }
+
     private Inspection[] TaskHistory(int limit) => _store.History("task", "history", DateTimeOffset.MinValue, limit)
         .Select(o => Wire.Decode<Inspection>(o.Detail)).ToArray();
 
@@ -62,6 +70,12 @@ public partial class MainWindow
     {
         var panel = Ui.Stack(Header("任务中心", Ui.Button("全测延迟", () => Run("nodes")),
             Ui.Button("全测下载速度", BatchSpeed)));
+        foreach (var queued in _store.Tasks.Where(t => t.State == "queued"))
+            panel.Children.Add(Ui.Card(Ui.Stack(Ui.Text($"排队 · {queued.Kind} · {queued.TargetId}"),
+                Ui.Value(queued.Id, 12), Ui.Button("取消排队任务", () => { _store.CancelTask(queued.Id); Render(); }))));
+        foreach (var stopped in _store.Tasks.Where(t => t.Terminal && (t.Result is null || t.ErrorCode is "executor_interrupted" or "executor_error")).Take(_historyLimit))
+            panel.Children.Add(Ui.Card(Ui.Stack(Ui.Text($"{(stopped.State == "canceled" ? "已取消" : "执行失败")} · {stopped.Kind}"),
+                Ui.Value(stopped.Id, 12), Ui.Value(stopped.Error))));
         if (_runningTask != null) panel.Children.Add(TaskDetails(_runningTask));
         foreach (var task in TaskHistory(_historyLimit))
             panel.Children.Add(new Expander {
@@ -93,6 +107,7 @@ public partial class MainWindow
                 else Status("此目标已从台账移除");
             }));
         var heading = Ui.Stack(Ui.Section($"{task.Label} · {task.State}"), Ui.Value(task.Summary));
+        if (task.TaskId.Length > 0) heading.Children.Add(Ui.Value("任务 ID：" + task.TaskId, 12));
         if (task.State == "运行中")
         {
             heading.Children.Add(new ProgressBar { Minimum = 0, Maximum = Math.Max(1, task.Items.Length),

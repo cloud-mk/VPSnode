@@ -1,8 +1,10 @@
 <Application x:Class="VPSnode.Desktop.App"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:VPSnode.Desktop"
  ShutdownMode="OnExplicitShutdown">
  <Application.Resources>
+  <local:HeaderSeparator x:Key="HeaderSeparator"/>
   <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="Canvas" Color="#EFF3F9"/>
   <SolidColorBrush x:Key="MutedSurface" Color="#E6EDF7"/>
@@ -148,6 +150,7 @@
    <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Line}"/>
    <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource Line}"/>
    <Setter Property="HeadersVisibility" Value="Column"/>
+   <Setter Property="ColumnHeaderStyle" Value="{DynamicResource TableHeader}"/>
    <Setter Property="GridLinesVisibility" Value="None"/>
    <Setter Property="CanUserAddRows" Value="False"/>
    <Setter Property="CanUserDeleteRows" Value="False"/>
@@ -167,12 +170,21 @@
     </Trigger>
    </Style.Triggers>
   </Style>
-  <Style TargetType="DataGridColumnHeader">
+  <Style x:Key="TableHeader" TargetType="DataGridColumnHeader">
    <Setter Property="Background" Value="{DynamicResource MutedSurface}"/>
    <Setter Property="Foreground" Value="{DynamicResource Text}"/>
    <Setter Property="Padding" Value="8,6"/>
    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+   <Setter Property="BorderThickness">
+    <Setter.Value>
+     <MultiBinding Converter="{StaticResource HeaderSeparator}">
+      <Binding Path="DisplayIndex" RelativeSource="{RelativeSource Self}"/>
+      <Binding Path="Columns.Count" RelativeSource="{RelativeSource AncestorType=DataGrid}"/>
+     </MultiBinding>
+    </Setter.Value>
+   </Setter>
   </Style>
+  <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource TableHeader}"/>
   <Style TargetType="TabControl">
    <Setter Property="Background" Value="{DynamicResource Surface}"/>
    <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>

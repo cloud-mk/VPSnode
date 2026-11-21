@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/VPSnode.Core/VPSnode.Core.csproj" />
+    <ProjectReference Include="../../src/VPSnode.Cli/VPSnode.Cli.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

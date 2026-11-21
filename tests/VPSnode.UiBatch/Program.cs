@@ -138,7 +138,7 @@ internal static class Program
         using (var output = File.Create(Path.Combine(path, "nodes-offscreen.png"))) png.Save(output);
 
         // A fresh successful observation must not override a later panel disable.
-        // An old success remains a dated historical sample, not an available node.
+        // Age alone does not change a successful result or availability count.
         var inboundDisabled = store.Nodes.Single(n => n.Id == "fixture-0");
         var clientDisabled = store.Nodes.Single(n => n.Id == "fixture-1");
         store.Save(inboundDisabled with { Server = new() { ["启用"] = "否" } });
@@ -153,16 +153,16 @@ internal static class Program
         Require(disabledRows.Length == 2 && disabledRows.All(r => Read<string>(r, "Status").Contains("已禁用") && Read<string>(r, "Delay") == "—"),
             "panel or client disable takes priority over previous successful measurement");
         var staleRow = nodeRows.Single(r => Read<Node>(r, "Node").Id == stale.Id);
-        Require(Read<string>(staleRow, "Status").Contains("上次可用 · 已过时") && Read<string>(staleRow, "Delay") == "55ms" && Read<string>(staleRow, "Recent") != "—",
-            "stale latency is retained as a dated historical sample");
-        Require(Walk(content).OfType<TextBlock>().Any(t => t.Text == "1 可用 · 0 已暂停"), "node group available count excludes disabled and stale results");
+        Require(Read<string>(staleRow, "Status") == "✓ 可用" && Read<string>(staleRow, "Delay") == "55ms" && Read<string>(staleRow, "Recent") != "—",
+            "old successful latency keeps its state and original time");
+        Require(Walk(content).OfType<TextBlock>().Any(t => t.Text == "2 可用 · 0 已暂停"), "node group count includes old successes and excludes disabled nodes");
         Page("overview");
         var availableTile = Walk(content).OfType<Button>().Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "节点可用");
-        Require(Walk(availableTile).OfType<TextBlock>().Any(t => t.Text == "1 / 8"), "overview available count excludes disabled and stale results");
+        Require(Walk(availableTile).OfType<TextBlock>().Any(t => t.Text == "2 / 8"), "overview includes old successful results");
         Walk(content).OfType<CheckBox>().Single(b => Equals(b.Content, "仅显示异常的 VPS 和节点")).IsChecked = true;
         Layout();
         var anomalyIds = Walk(content).OfType<DataGrid>().SelectMany(t => t.Items.Cast<object>()).Select(r => Read<Node>(r, "Node").Id).ToArray();
-        Require(new[] { "fixture-0", "fixture-1", stale.Id }.All(anomalyIds.Contains), "anomaly filter includes disabled and stale successes");
+        Require(new[] { "fixture-0", "fixture-1" }.All(anomalyIds.Contains) && !anomalyIds.Contains(stale.Id), "anomaly filter retains disabled nodes and excludes old successes");
         store.Save(inboundDisabled); store.Save(clientDisabled); store.Delete("node", stale.Id);
 
         Page("hosts");

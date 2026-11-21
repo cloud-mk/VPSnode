@@ -57,7 +57,8 @@ public partial class MainWindow
         void Theme(object sender, RoutedEventArgs args)
         {
             var theme = dark.IsChecked == true ? "dark" : "light";
-            _store.Save(_store.Settings with { Theme = theme });
+            using var patch = System.Text.Json.JsonDocument.Parse(Wire.Encode(new { theme }));
+            _store.EditSettings(patch.RootElement);
             Ui.Theme(theme);
         }
         dark.Checked += Theme; dark.Unchecked += Theme;
@@ -90,7 +91,10 @@ public partial class MainWindow
                     PingUrl = delay.Text.Trim(), PingStatus = Integer(pingStatus.Text, 100, 599, "延迟测试状态码"),
                     SpeedUrl = speed.Text.Trim(), SpeedBytes = checked((int)(mb * 1_000_000m))
                 };
-                _store.Save(updated);
+                using var patch = System.Text.Json.JsonDocument.Parse(Wire.Encode(new {
+                    updated.V2Directory, updated.FollowGroups, updated.ScheduledInspectionEnabled,
+                    updated.IntervalMinutes, updated.HistoryDays, updated.PingUrl, updated.PingStatus, updated.SpeedUrl, updated.SpeedBytes }));
+                _store.EditSettings(patch.RootElement);
                 UpdateTaskPanel();
                 feedback.Text = "设置已保存";
                 Status("设置已保存");
@@ -112,11 +116,7 @@ public partial class MainWindow
         {
             try
             {
-                using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(path.Text.Trim(), "guiConfigs", "guiNConfig.json")));
-                var item = config.RootElement.EnumerateObject().First(p => p.Name.Equals("SpeedTestItem", StringComparison.OrdinalIgnoreCase)).Value;
-                var url = item.EnumerateObject().First(p => p.Name.Equals("SpeedPingTestUrl", StringComparison.OrdinalIgnoreCase)).Value.GetString();
-                if (url is null || !Validation.WebUrl(url)) throw new InvalidDataException("v2rayN 测试目标无效。");
-                delay.Text = url;
+                delay.Text = V2Sync.PingTarget(path.Text.Trim());
                 feedback.Text = "测试目标已读取；保存设置后生效。";
             }
             catch (Exception ex) { Fail(ex); }

@@ -26,6 +26,9 @@ jobs:
       - name: Backup round trip
         shell: pwsh
         run: dotnet run --project tests/VPSnode.BackupTests/VPSnode.BackupTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-backup-test"
+      - name: Agent CLI cross-process contract
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.AgentTests/VPSnode.AgentTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-agent-test"
       - name: Identity and inventory regression
         shell: pwsh
         run: |

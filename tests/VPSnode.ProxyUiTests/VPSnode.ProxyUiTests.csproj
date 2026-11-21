@@ -1,1 +1,1 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF></PropertyGroup><ItemGroup><ProjectReference Include="../../src/VPSnode.Desktop/VPSnode.Desktop.csproj" /></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><UseWPF>true</UseWPF></PropertyGroup><ItemGroup><ProjectReference Include="../../src/VPSnode.Desktop/VPSnode.Desktop.csproj" /><ProjectReference Include="../../src/VPSnode.Cli/VPSnode.Cli.csproj" ReferenceOutputAssembly="false" /></ItemGroup></Project>

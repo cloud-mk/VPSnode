@@ -1,8 +1,12 @@
 # VPSnode
 
-Windows 本地 VPS 与代理节点管理工具，也是一份持续维护的网络资产台账。
+初学者友好的 Windows 本地 VPS 与代理节点管理工具，配备可供 AI Agent 调用的 CLI，将网络运维成果变成可视、可核实的资产台账。
 
-集中记录 VPS、代理节点、网站与证书，将配置来源、关联关系和检测历史放在一起，方便查询、核对和迁移。
+**Beginner-friendly · Visual · Agent-friendly · Verifiable**：普通用户用 GUI 独立管理，Agent 用 CLI 自动录入、维护和检测，双方查看同一份配置来源、关联关系与检测历史。
+
+- **普通代理用户**：没有 VPS 也能使用；从分享链接或本机 v2rayN 导入节点，测速、查看配置并手动维护。
+- **VPS 用户**：通过图形界面添加 VPS 或 SSH 别名，采集有权读取的服务器、入站和监听信息，管理网站、证书与检测结果。
+- **Agent 用户**：使用 SSH、管理面板或其他工具完成远端运维，再用 VPSnode CLI 维护台账、执行检测、查询结果；GUI 让普通用户清楚看到并核对工作成果。VPSnode 专注本地资产与检测，不承担复杂远端部署编排。
 
 [English](README.en.md) · [下载 / Releases](https://github.com/cloud-mk/VPSnode/releases) · [反馈 / Issues](https://github.com/cloud-mk/VPSnode/issues)
 
@@ -48,6 +52,15 @@ VPSnode 分别记录面板配置、进程启动文件、实际监听和代理请
 
 检测会连接你配置的服务器、网站和测试目标；下载测速会消耗网络流量。批量下载串行执行，每条最多 45 秒且受设置中的字节数限制。
 
+## 0.1.11 更新
+
+- Agent 可维护全部现有业务类别：资产增改删、来源同步、配置与重复核对、设置、备份和恢复；GUI/CLI 继续共用 Core、加密 SQLite 和检测器。
+- 检测形成稳定任务 ID、持久进度、最终结果、失败原因及历史查询闭环。CLI 自动启动短生命周期本地 worker，GUI 未运行也能执行；两种入口共用执行锁与取消请求，不开放新端口。
+- 所有共享表格统一浅色细表头分隔线，保留原生拖宽、列重排与节点页原位更新；同结构分组协调列宽。
+- 直接呈现最近检测结果与原时间，不再按记录年龄降级；真实证书过期和提醒继续有效。
+
+[Agent 使用指南](docs/agent-cli.md) · [GUI/CLI 覆盖矩阵及缺陷分析](docs/coverage-0.1.11.md) · [本版实际验收范围](docs/validation-0.1.11.md)。
+
 ## 0.1.10 更新
 
 - 测速进度与结果原位更新，保留节点页、选中状态、滚动位置及手调列宽。
@@ -81,7 +94,7 @@ VPSnode 分别记录面板配置、进程启动文件、实际监听和代理请
 
 ## CLI 与构建
 
-运行 `vpsnode-cli.exe help` 查看命令。资产 JSON 通过 UTF-8 标准输入导入，避免将凭据放入命令行。参阅 [资产格式](docs/inventory.md) 和 [虚构示例](examples/inventory.example.json)。
+运行 `vpsnode-cli.exe help` 查看结构化命令帮助。资产 JSON 通过 UTF-8 标准输入导入，避免将凭据放入命令行。参阅 [Agent 使用指南](docs/agent-cli.md)、[资产格式](docs/inventory.md) 和 [虚构示例](examples/inventory.example.json)。
 
 构建需要 Windows x64、.NET 10 SDK 和 PowerShell 7：
 
@@ -94,7 +107,7 @@ dotnet build VPSnode.slnx -c Release
 
 ## 当前限制与反馈
 
-本版验证范围见 [0.1.10 验收记录](docs/validation-0.1.10.md)。物理多显示器 DPI 切换、跨电脑恢复、干净系统安装／升级／卸载和长期连续运行尚未完成验收。协议与参数支持取决于本地代理内核和配置。未识别或不完整的配置需要进一步核对，不应视为已验证可用。
+本版验证范围见 [0.1.11 验收记录](docs/validation-0.1.11.md)。物理多显示器 DPI 切换、跨电脑恢复、干净系统安装／升级／卸载和长期连续运行尚未完成验收。协议与参数支持取决于本地代理内核和配置。未识别或不完整的配置需要进一步核对，不应视为已验证可用。
 
 欢迎通过 Issues 提交缺陷和建议。请提供软件版本、复现步骤、预期结果及脱敏后的错误信息，不要上传真实资产数据库、备份、私钥或分享链接。
 

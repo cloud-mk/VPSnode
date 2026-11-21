@@ -272,6 +272,10 @@ public sealed partial class Store
         }
         string Remap(string kind, string id) => kind is "node" or "speed" or "sni" or "sni-node" or "sni-vps" or "sni-local"
             ? aliases.GetValueOrDefault(id, id) : id;
+        foreach (var task in List<InspectionTask>(db, tx, "inspection-task"))
+            Put(db, tx, "inspection-task", task.Id, task with { TargetId = Remap(task.Kind, task.TargetId),
+                Result = task.Result is null ? null : task.Result with {
+                    Items = task.Result.Items.Select(i => i with { Id = Remap(i.Kind, i.Id) }).ToArray() } });
         foreach (var observation in snapshot.Observations)
         {
             var value = observation with { Id = Remap(observation.Kind, observation.Id) };

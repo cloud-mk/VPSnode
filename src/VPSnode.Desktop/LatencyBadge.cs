@@ -36,6 +36,6 @@ internal sealed class LatencyBadge : Border
         }
         else { Background = Brushes.Transparent; Ui.Brush(text, Control.ForegroundProperty, "Quiet"); }
         Child = text;
-        ToolTip = "最近一次成功检测延迟；检测时间与过时状态见同行。";
+        ToolTip = "最近一次成功检测延迟；检测时间见同行。";
     }
 }

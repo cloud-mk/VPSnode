@@ -13,6 +13,16 @@ public static class V2Sync
 
     public static V2Group[] Groups(string directory) => Read(directory).Groups;
 
+    public static string PingTarget(string directory)
+    {
+        using var config = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "guiConfigs", "guiNConfig.json")));
+        var item = config.RootElement.EnumerateObject().FirstOrDefault(p => p.Name.Equals("SpeedTestItem", StringComparison.OrdinalIgnoreCase)).Value;
+        if (item.ValueKind != System.Text.Json.JsonValueKind.Object) throw new InvalidDataException("v2rayN 未提供测速设置。");
+        var url = item.EnumerateObject().FirstOrDefault(p => p.Name.Equals("SpeedPingTestUrl", StringComparison.OrdinalIgnoreCase)).Value;
+        if (url.ValueKind != System.Text.Json.JsonValueKind.String || !Validation.WebUrl(url.GetString()!)) throw new InvalidDataException("v2rayN 测试目标无效。");
+        return url.GetString()!;
+    }
+
     internal static string? ProbeLink(string directory, Host? host, Node inbound)
     {
         if (host is null || !inbound.VpsVerified || NodeIdentity.Client(inbound).Length == 0) return null;
