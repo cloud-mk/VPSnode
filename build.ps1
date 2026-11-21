@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)] [string] $Output,
     [string] $DotNet = 'dotnet',
     [string] $Wix,
-    [string] $Version = '0.1.9'
+    [string] $Version = '0.1.10'
 )
 
 $ErrorActionPreference = 'Stop'

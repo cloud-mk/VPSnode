@@ -10,6 +10,7 @@ public sealed record NodeMatch(string LeftId, string RightId, string Disposition
     IdentityDifference[] Differences)
 {
     public bool CanMerge => Disposition is "Same" or "Review";
+    public bool CanAssociate => CanMerge && !Differences.Any(d => d.Conflict);
 }
 
 /// <summary>Identity is endpoint + client + route, independent of names and source serialization.</summary>
@@ -148,7 +149,9 @@ public static class NodeIdentity
         if (endpointA != endpointB)
             differences.Add(new("连接地址", endpointA.Length == 0 ? "未知" : endpointA, endpointB.Length == 0 ? "未知" : endpointB,
                 endpointA.Length > 0 && endpointB.Length > 0 && !aliasEndpoint));
-        foreach (var key in RouteKeys)
+        // Unknown extensions cannot silently bypass route comparison.
+        foreach (var key in RouteKeys.Concat(a?.Options.Keys.AsEnumerable() ?? []).Concat(b?.Options.Keys.AsEnumerable() ?? [])
+            .Where(k => k is not ("type" or "security" or "sni")).Append("sni").Distinct(StringComparer.OrdinalIgnoreCase))
         {
             string[] Values(ShareLink? link, Dictionary<string, string[]> server)
             {
@@ -169,7 +172,7 @@ public static class NodeIdentity
             }
             var x = Values(a, serverA); var y = Values(b, serverB);
             if (x.Intersect(y, StringComparer.Ordinal).Any()) continue;
-            Field(key, string.Join(" / ", x), string.Join(" / ", y), secret: key is "encryption" or "obfs-password" or "extra" or "sid");
+            Field(key, string.Join(" / ", x), string.Join(" / ", y), secret: ShareLink.IsSensitive(key) || key == "encryption");
         }
         if (left.Name != right.Name) differences.Add(new("备注名称", left.Name, right.Name, false));
         var knownClient = clientA.Length > 0 && clientA == clientB;
@@ -182,7 +185,7 @@ public static class NodeIdentity
         if (knownClient && endpointKnown && !routeConflict && left.Port > 0 && left.Port == right.Port)
             return new(left.Id, right.Id, "Same", "客户端身份一致，端点及已知路由兼容。", [.. differences]);
         return new(left.Id, right.Id, comparable ? "Review" : "Different",
-            comparable ? "存在未确认字段或路由差异；确认后可保留左侧配置并关联全部来源。" : "没有足够的共同身份依据。", [.. differences]);
+            comparable ? "存在信息缺失或配置差异，请核对；明确冲突须先处理，再确认关联。" : "没有足够的共同身份依据。", [.. differences]);
     }
 
     public static NodeSource[] Sources(Node node)
@@ -199,28 +202,43 @@ public static class NodeIdentity
         .GroupBy(s => (s.Kind, s.Key, Directory: s.Directory.ToUpperInvariant())).Select(g => g.Last())
         .OrderBy(s => s.Kind, StringComparer.Ordinal).ThenBy(s => s.Key, StringComparer.Ordinal).ThenBy(s => s.Directory, StringComparer.OrdinalIgnoreCase).ToArray();
     public static bool SameDirectory(string a, string b) => string.Equals(a.TrimEnd('/', '\\'), b.TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase);
-    public static Node Merge(Node old, Node value, bool preferIncoming = false)
+    public static Node Merge(Node old, Node value, bool preferIncoming = false, bool associate = false)
     {
         var sources = OrderedSources(Sources(old).Concat(Sources(value)));
+        if (associate)
+        {
+            NodeSource Snapshot(Node node)
+            {
+                var configuration = Wire.Encode(node with { Sources = [] });
+                var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(configuration)));
+                return new("关联前台账", node.Id + "/" + hash, Name: node.Name, Link: node.Link, Configuration: configuration);
+            }
+            sources = OrderedSources(sources.Concat([Snapshot(old), Snapshot(value)]));
+        }
         var server = new Dictionary<string, string>(old.Server);
-        if (value.InventoriedAt is null || old.InventoriedAt is null || value.InventoriedAt >= old.InventoriedAt)
-            foreach (var item in value.Server) server[item.Key] = item.Value;
+        if (associate || value.InventoriedAt is null || old.InventoriedAt is null || value.InventoriedAt >= old.InventoriedAt)
+            foreach (var item in value.Server)
+                if (!associate || !server.TryGetValue(item.Key, out var prior) || string.IsNullOrWhiteSpace(prior)) server[item.Key] = item.Value;
         var related = new Dictionary<string, string>(old.Related);
-        foreach (var item in value.Related) related[item.Key] = item.Value;
+        foreach (var item in value.Related)
+            if (!associate || !related.TryGetValue(item.Key, out var prior) || string.IsNullOrWhiteSpace(prior)) related[item.Key] = item.Value;
         string Value(string prior, string incoming) => preferIncoming ? Store.Field(incoming, prior) : Store.Field(prior, incoming);
         return ShareLink.Normalize(old with
         {
-            Name = old.Manual ? old.Name : Store.Field(value.Name, old.Name),
+            Name = old.Manual || associate ? old.Name : Store.Field(value.Name, old.Name),
             Link = preferIncoming ? Store.Field(value.Link, old.Link) : Store.Field(old.Link, value.Link),
-            HostId = Store.Field(old.HostId, value.HostId), InboundId = Store.Field(value.InboundId, old.InboundId),
+            HostId = Store.Field(old.HostId, value.HostId), InboundId = associate ? Store.Field(old.InboundId, value.InboundId) : Store.Field(value.InboundId, old.InboundId),
             ClientId = Store.Field(Client(old), Client(value)),
             Address = Value(old.Address, value.Address), Port = preferIncoming && value.Port > 0 ? value.Port : old.Port > 0 ? old.Port : value.Port,
             Protocol = Value(old.Protocol, value.Protocol), Transport = Value(old.Transport, value.Transport), Security = Value(old.Security, value.Security),
             Notes = string.Join(Environment.NewLine, new[] { old.Notes, value.Notes }.Where(x => x.Length > 0).Distinct()),
             InventoriedAt = value.InventoriedAt > old.InventoriedAt || old.InventoriedAt is null ? value.InventoriedAt : old.InventoriedAt,
             VpsVerified = old.VpsVerified || value.VpsVerified, Manual = old.Manual || value.Manual,
+            Paused = associate ? old.Paused || value.Paused : old.Paused,
+            SourceRemoved = associate ? !old.Manual && !value.Manual && !old.VpsVerified && !value.VpsVerified &&
+                sources.Any(s => s.Kind == "v2rayN") && sources.Where(s => s.Kind == "v2rayN").All(s => s.Removed) : old.SourceRemoved,
             V2Id = Store.Field(old.V2Id, value.V2Id), V2Directory = Store.Field(old.V2Directory, value.V2Directory), GroupId = Store.Field(old.GroupId, value.GroupId),
-            Sources = sources, Source = Store.Field(string.Join(" + ", sources.Where(s => s.Kind != "ledger").Select(s => s.Kind).Distinct()),
+            Sources = sources, Source = Store.Field(string.Join(" + ", sources.Where(s => s.Kind is not ("ledger" or "关联前台账")).Select(s => s.Kind).Distinct()),
                 Store.Field(old.Source, value.Source)),
             Server = server, Related = related
         });

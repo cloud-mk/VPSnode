@@ -122,19 +122,31 @@ public partial class MainWindow
     private void ShowDuplicateNodes()
     {
         var candidates = _store.FindDuplicateCandidates();
-        var body = Ui.Stack(Ui.Section("核对重复节点"), Ui.Text("只有已核实的身份与路由相符才自动关联。下列项目保留独立记录，先比较差异再决定。", brush: "Quiet"));
+        var body = Ui.Stack(Ui.Section("核对重复节点"), Ui.Text("左右仅按台账 ID 排序，不代表来源权威性。信息缺失可补充；明确的身份或路由冲突须先处理。关联仅修改本地台账。", brush: "Quiet"));
         var window = Dialog("核对重复节点", body, 820, 580);
+        using var views = new NodeComparisonWindows(window, (node, side) =>
+            Dialog(side + "配置 · " + node.Name, Ui.Stack(Ui.Section(node.Name),
+                Ui.Text("只读配置 · 来源：" + ConfigurationSource(node), brush: "Quiet"), ConfigTabs(node, true)),
+                Math.Min(640, SystemParameters.WorkArea.Width / 2), 680));
         foreach (var match in candidates)
         {
             var left = _store.Nodes.First(n => n.Id == match.LeftId);
             var right = _store.Nodes.First(n => n.Id == match.RightId);
             var group = Ui.Stack(Ui.Section(left.Name + " ↔ " + right.Name), Ui.Text(match.Reason),
-                Ui.Table(match.Differences, [("字段", "Field", -1), ("保留记录", "Left", -2), ("待关联记录", "Right", -2)]));
-            group.Children.Add(Ui.Row(Ui.Button("查看左侧", () => { window.Close(); OpenNode(left.Id); }),
-                Ui.Button("查看右侧", () => { window.Close(); OpenNode(right.Id); })));
-            if (match.CanMerge) group.Children.Add(Ui.Button("确认关联并保留左侧配置", async () =>
+                Ui.Text("左侧来源：" + ConfigurationSource(left) + "；右侧来源：" + ConfigurationSource(right), 12, "Quiet"),
+                Ui.Table(match.Differences.Select(d => new { d.Field, d.Left, d.Right,
+                    Comparison = d.Conflict ? "! 配置冲突" : d.Field == "备注名称" ? "○ 名称不同" : "◇ 信息缺失" }),
+                    [("字段", "Field", -1), ("左侧", "Left", -2), ("右侧", "Right", -2), ("核对结果", "Comparison", 126)]));
+            group.Children.Add(Ui.Row(Ui.Button("查看左侧", () => views.Open(left, right, false)),
+                Ui.Button("查看右侧", () => views.Open(left, right, true))));
+            group.PreviewMouseDown += (_, _) => views.Select(left, right);
+            group.GotKeyboardFocus += (_, _) => views.Select(left, right);
+            if (match.CanAssociate)
             {
-                if (MessageBox.Show(window, "合并后保留左侧有效客户端配置、两侧来源及全部历史；右侧独立记录将被关联。确认已核对关键差异？",
+                group.Children.Add(Ui.Text("关联后：保留左侧现有客户端配置，空白台账字段由右侧补充；两侧完整配置另存加密快照，合并来源、备注、历史及网站关系。", 12, "Quiet"));
+                group.Children.Add(Ui.Button("确认关联为同一节点", async () =>
+            {
+                if (MessageBox.Show(window, "仅合并本地台账：左侧现有配置保留，缺失项补充；两侧关联前完整配置、来源、备注及历史均保留。右侧本地 ID 的历史和关联迁入左侧 ID。不会修改 VPS 或 v2rayN。确认是同一节点？",
                     "确认节点关联", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
                 try
                 {
@@ -143,6 +155,8 @@ public partial class MainWindow
                 }
                 catch (Exception ex) { Fail(ex); }
             }));
+            }
+            else group.Children.Add(Ui.Text("存在明确冲突，已暂缓关联。请先核对并修正实际配置。", brush: "Warn"));
             body.Children.Add(Ui.Card(group));
         }
         if (candidates.Length == 0) body.Children.Add(Ui.Text("没有需要核对的相似记录。"));

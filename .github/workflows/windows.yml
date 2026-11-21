@@ -41,6 +41,9 @@ jobs:
       - name: Scheduler and UI regressions
         shell: pwsh
         run: dotnet run --project tests/VPSnode.UiRegression/VPSnode.UiRegression.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-ui-regression"
+      - name: Node layout and comparison lifecycle
+        shell: pwsh
+        run: dotnet run --project tests/VPSnode.StabilityTests/VPSnode.StabilityTests.csproj -c Release -- "$env:RUNNER_TEMP/VPSnode-stability"
       - name: Prepare installer tool
         run: dotnet tool install wix --version 5.0.2 --tool-path "$env:RUNNER_TEMP/wix"
       - name: Package Windows x64

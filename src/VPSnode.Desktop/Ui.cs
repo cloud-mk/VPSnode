@@ -105,7 +105,7 @@ internal static class Ui
                     MinWidth = 80, SortMemberPath = property, CellTemplate = new DataTemplate { VisualTree = badge } });
                 continue;
             }
-            if (property is "Cert" or "On80" or "On443" or "ListenerState")
+            if (property is "Cert" or "On80" or "On443" or "ListenerState" or "Comparison")
             {
                 var pill = new FrameworkElementFactory(typeof(StatusPill));
                 pill.SetBinding(StatusPill.ValueProperty, new Binding(property));
@@ -244,7 +244,7 @@ internal static class Ui
             var strip = new FrameworkElementFactory(typeof(ProgressBar));
             strip.SetValue(FrameworkElement.HeightProperty, 3d);
             strip.SetValue(FrameworkElement.MarginProperty, new Thickness(3, 3, 3, 0));
-            strip.SetValue(ProgressBar.MaximumProperty, speedMaximum);
+            strip.SetBinding(ProgressBar.MaximumProperty, new Binding("SpeedMaximum"));
             strip.SetValue(Control.BorderThicknessProperty, new Thickness(0));
             strip.SetValue(Control.BackgroundProperty, Brushes.Transparent);
             strip.SetResourceReference(ProgressBar.ForegroundProperty, "Speed");

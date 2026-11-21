@@ -33,7 +33,8 @@ public partial class MainWindow
                 _recentTask = TaskHistory(1).FirstOrDefault();
             _displayedStart = current.Started;
             UpdateTaskPanel();
-            if (IsVisible && System.Windows.Input.Keyboard.FocusedElement is not TextBox && (_page is "tasks" or "nodes") && !OwnedWindows.OfType<Window>().Any(w => w.IsVisible))
+            if (IsVisible && _page == "nodes") RefreshVisibleData();
+            else if (IsVisible && System.Windows.Input.Keyboard.FocusedElement is not TextBox && _page == "tasks" && !OwnedWindows.OfType<Window>().Any(w => w.IsVisible))
             {
                 var offset = Scroller.VerticalOffset;
                 Render();

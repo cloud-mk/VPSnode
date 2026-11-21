@@ -101,7 +101,8 @@ internal static class Program
             var grid = Walk(window).OfType<DataGrid>().Single();
             Require(grid.Columns.Last().ActualWidth >= 218 && grid.Columns[0].ActualWidth >= 160, "node minimum widths retained at " + width);
         }
-        Require(window.Title.Contains("0.1.9") && ((TextBlock)window.FindName("BrandVersion")).Text == "v0.1.9", "brand and window versions agree");
+        var version = typeof(Store).Assembly.GetName().Version!.ToString(3);
+        Require(window.Title.Contains(version) && ((TextBlock)window.FindName("BrandVersion")).Text == "v" + version, "brand and window versions agree");
         typeof(MainWindow).GetMethod("Quit", Private)!.Invoke(window, []);
         Console.WriteLine("PASS UI regression suite (in-process; not OS mouse validation)");
     }

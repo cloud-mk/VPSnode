@@ -6,7 +6,7 @@ Use a fresh isolated directory for each run. Never point tests at your normal ap
 每次测试使用全新隔离目录，不得使用日常台账目录。
 
 ```powershell
-$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests', 'UiRegression'
+$suites = 'Smoke', 'BackupTests', 'IdentityTests', 'InventoryChecks', 'UiBatch', 'FormTests', 'UiRegression', 'StabilityTests'
 foreach ($suite in $suites) {
     dotnet run --project "tests/VPSnode.$suite/VPSnode.$suite.csproj" -c Release -- "../test-data/$suite"
     if ($LASTEXITCODE) { throw "Failed: $suite" }
@@ -24,3 +24,7 @@ Architecture: `VPSnode.Core` handles storage, inventory and probes; `VPSnode.Des
 Public contributions must use fictional identifiers and documentation IP ranges. Do not commit databases, backups, credentials, personal paths, or screenshots of real assets. Release packages must include both READMEs, LICENSE, NOTICE, and dependency notices.
 
 For the opt-in loopback proxy suite, screenshot rendering and the exact verification limits of this version, see [validation-0.1.9.md](validation-0.1.9.md). The portable package also includes these documents, screenshots and CHANGELOG.md.
+
+0.1.10 adds `StabilityTests` for multiple groups, in-place progress, selection/scroll preservation, column width/reorder/scroll sharing, theme rendering, retired-grid event cleanup and real comparison window lifecycle. These checks run WPF controls and Dispatcher callbacks, not OS input. `ProxyUiTests` additionally exercises all four test buttons through an existing Xray on loopback and checks control identity and manual widths throughout. See [validation-0.1.10.md](validation-0.1.10.md).
+
+Node association retains the left local ID and its existing configuration, fills missing fields, merges notes/provenance/history and remaps website/task/queue references. Both original configurations are retained as encrypted `NodeSource.Configuration` snapshots (optional JSON field, no SQLite schema change). Known conflicts block manual association. A later incompatible source route is retained as a separate review record, including associations confirmed by an older version. Association does not write to SSH or v2rayN. Existing 0.1.9 data and backups remain readable; information already discarded by an older merge cannot be reconstructed retroactively.

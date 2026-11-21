@@ -16,6 +16,11 @@ Check(NodeIdentity.Compare(first, same, [host]).Disposition == "Same", "remark a
 var partial = first with { Id = "partial", Link = "", Transport = "", Security = "", Server = [] };
 Check(NodeIdentity.Compare(first, partial, [host]).Disposition == "Same", "missing collected fields remain unknown");
 Check(NodeIdentity.Compare(first, partial with { ClientId = "" }, [host]).Disposition == "Review", "missing client identity requires confirmation");
+Check(!NodeIdentity.Compare(first, partial with { ClientId = "" }, [host]).Differences.Any(d => d.Conflict), "unknown identity information is missing rather than conflicting");
+var removedSource = same with { Manual = false, SourceRemoved = true, V2Id = "removed", Sources = [new("v2rayN", "removed", Removed: true)] };
+var liveSource = same with { Manual = false, V2Id = "live", Sources = [new("v2rayN", "live")] };
+Check(!NodeIdentity.Merge(removedSource, liveSource, associate: true).SourceRemoved && NodeIdentity.Merge(removedSource with { Paused = true }, liveSource, associate: true).Paused,
+    "association retains active source availability and explicit pause choice");
 var domain = ShareLink.New(link.Replace("@192.0.2.10", "@site.example.org"), "", "domain");
 Check(NodeIdentity.Compare(first, domain, [host]).Disposition == "Review", "domain is not inferred from a matching UUID alone");
 first = first with { Server = new() { ["分享地址"] = "site.example.org" } };
@@ -119,11 +124,57 @@ using (var db = new SqliteConnection("Data Source=" + V2Sync.Database(v2)))
 V2Sync.Apply(confirmation, v2, ["group"], false);
 var differentRoute = confirmation.Nodes.Single(n => n.V2Id == "one");
 Check(confirmation.FindDuplicateCandidates().Any(p => p.Disposition == "Review"), "route conflict exposed for manual review");
+var beforeConflict = Wire.Encode(confirmation.CaptureBackup());
+try { confirmation.MergeNodes("server", differentRoute.Id); throw new Exception("conflicting route accepted"); }
+catch (InvalidDataException) { Check(beforeConflict == Wire.Encode(confirmation.CaptureBackup()), "conflicting route association rejected without data changes"); }
+// Known conflicts must be corrected first; missing server fields can then be confirmed.
+confirmation.Save(confirmation.Nodes.Single(n => n.Id == "server") with { Link = "", Server = [], Security = "", Transport = "" });
+var leftBefore = confirmation.Nodes.Single(n => n.Id == "server");
+confirmation.Save(leftBefore with { Notes = "左侧人工备注", Related = new() { ["网站"] = "left.example.org" } });
+confirmation.Save(differentRoute with { Notes = "右侧人工备注", Related = new() { ["网站"] = "right.example.org", ["依赖"] = "fixture" } });
+string ExternalHash()
+{
+    using var file = new FileStream(V2Sync.Database(v2), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+    return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file));
+}
+var v2Hash = ExternalHash();
 confirmation.MergeNodes("server", differentRoute.Id);
+Check(v2Hash == ExternalHash(), "association does not write external v2rayN database");
+var associated = confirmation.Nodes.Single(n => n.Id == "server");
+Check(associated.Notes.Contains("左侧人工备注") && associated.Notes.Contains("右侧人工备注") && associated.Related["网站"] == "left.example.org" &&
+    associated.Related["依赖"] == "fixture", "association retains notes and active metadata without overwriting existing values");
+var snapshots = associated.Sources.Where(s => s.Configuration.Length > 0).Select(s => Wire.Decode<Node>(s.Configuration)).ToArray();
+Check(snapshots.Length == 2 && snapshots.Any(n => n.Related.GetValueOrDefault("网站") == "right.example.org") &&
+    snapshots.Any(n => n.Id == "server" && n.Notes == "左侧人工备注"), "both complete pre-association configurations retained in encrypted asset");
+var snapshotBackup = Path.Combine(root, "associated.vpsbackup"); confirmation.ExportBackup(snapshotBackup, "fixture-backup-password");
+var snapshotRestore = new Store(Path.Combine(root, "associated-restore")); snapshotRestore.ImportBackup(snapshotBackup, "fixture-backup-password", false);
+Check(snapshotRestore.Nodes.Single(n => n.Id == "server").Sources.Where(s => s.Configuration.Length > 0).Select(s => s.Configuration).Order()
+    .SequenceEqual(associated.Sources.Where(s => s.Configuration.Length > 0).Select(s => s.Configuration).Order()), "encrypted backup and restore preserve full associated configurations");
 var confirmedCount = confirmation.Nodes.Length;
 V2Sync.Apply(confirmation, v2, ["group"], false);
 Check(confirmation.Nodes.Length == confirmedCount && confirmation.Nodes.Single(n => n.Id == "server").Sources.Any(s => s.Key == "one" && s.Confirmed),
     "manual source association persists across synchronization");
+var pureSync = new Store(Path.Combine(root, "v2-only-associated")); pureSync.Save(host);
+V2Sync.Apply(pureSync, v2, ["group"], false);
+var pureIncoming = pureSync.Nodes.Single(n => n.V2Id == "one");
+pureSync.Save(pureIncoming with { Id = "partial-local", Link = "", Transport = "", Security = "", ClientId = NodeIdentity.Client(pureIncoming), V2Id = "", V2Directory = "", Sources = [], Manual = false, Source = "本机导入" });
+pureSync.MergeNodes("partial-local", pureIncoming.Id);
+var pureCount = pureSync.Nodes.Length;
+var multipleSync = new Store(Path.Combine(root, "multi-source-follow")); multipleSync.Save(host);
+multipleSync.Save(pureIncoming with { Sources = NodeIdentity.Sources(pureIncoming).Append(new("v2rayN", "another-source", Path.GetFullPath(v2), "group", Link: pureIncoming.Link)).ToArray() });
+using (var db = new SqliteConnection("Data Source=" + V2Sync.Database(v2)))
+{
+    db.Open(); using var q = db.CreateCommand(); q.CommandText = "UPDATE ProfileItem SET Sni='changed.example.org' WHERE IndexId='one'"; q.ExecuteNonQuery();
+}
+V2Sync.Apply(confirmation, v2, ["group"], false);
+Check(confirmation.Nodes.Length == confirmedCount + 1 && ShareLink.Parse(confirmation.Nodes.Single(n => n.Id == "server").Link).Sni == "site.example.org",
+    "later conflicting source route splits into review candidate instead of overwriting confirmed configuration");
+V2Sync.Apply(pureSync, v2, ["group"], false);
+Check(pureSync.Nodes.Length == pureCount + 1 && ShareLink.Parse(pureSync.Nodes.Single(n => n.Id == "partial-local").Link).Sni == "site.example.org",
+    "confirmed association of v2rayN-only records also resists later conflicting source overwrite");
+V2Sync.Apply(multipleSync, v2, ["group"], false);
+Check(ShareLink.Parse(multipleSync.Nodes.Single(n => n.Id == pureIncoming.Id).Link).Sni == "site.example.org" && multipleSync.Nodes.Any(n => n.Id != pureIncoming.Id && n.V2Id == "one"),
+    "one changed source cannot overwrite a record shared by independent source identities");
 try
 {
     confirmation.MergeNodes("server", confirmation.Nodes.Single(n => NodeIdentity.Client(n) == secondId).Id);

@@ -61,7 +61,7 @@ public sealed record Node
 }
 
 public sealed record NodeSource(string Kind, string Key, string Directory = "", string GroupId = "",
-    string Name = "", string Link = "", bool Removed = false, bool Confirmed = false);
+    string Name = "", string Link = "", bool Removed = false, bool Confirmed = false, string Configuration = "");
 
 public sealed record WebTarget
 {

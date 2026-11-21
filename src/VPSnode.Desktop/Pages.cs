@@ -149,15 +149,15 @@ public partial class MainWindow
         root.Children.Add(Header("代理节点", Ui.Button("粘贴分享链接", () => ImportLinks(false), true),
             Ui.Button("导入 TXT", () => ImportLinks(true)), Ui.Button("v2rayN 同步", SyncDialog),
             Ui.Button("核对重复节点", DuplicateNodes)));
+        _nodeCancel = Ui.Button("取消任务", () => { _current?.Cancel(); _monitor.CancelActive(); });
+        _nodeCancel.Visibility = _current != null || _runningTask != null ? Visibility.Visible : Visibility.Collapsed;
         root.Children.Add(Ui.Row(Ui.Button("全测延迟", () => Run("nodes")),
-            Ui.Button("全测下载速度", BatchSpeed), Ui.Text("全测覆盖全部 VPS 与未归属节点；下载串行、每节点限时 45 秒。", 12, "Quiet")));
+            Ui.Button("全测下载速度", BatchSpeed), _nodeCancel, Ui.Text("全测覆盖全部 VPS 与未归属节点；下载串行、每节点限时 45 秒。", 12, "Quiet")));
         if (_nodeHostFilter.Length > 0) options.Children.Add(Ui.Button("本组测延迟", () => Run("host-nodes", selected?.Id ?? "")));
         options.Margin = new Thickness(0, 0, 0, 9);
         root.Children.Add(options);
-        var matching = _store.Nodes.Where(n => (_nodeHostFilter.Length == 0 || n.HostId == _nodeHostFilter ||
-            (_nodeHostFilter == "-" && n.HostId.Length == 0)) &&
-            (_search.Length == 0 || (n.Name + " " + n.Address + " " + n.Protocol).Contains(_search, StringComparison.OrdinalIgnoreCase)))
-            .OrderBy(n => n.Name).ToArray();
+        var matching = MatchingNodes();
+        _nodeLayout = NodeLayout(matching, hosts);
         var speeds = _store.LatestDownloads();
         var maximum = Math.Max(1, speeds.Values.Select(o => o.Value ?? 0).DefaultIfEmpty().Max());
         int groupIndex = 0;
@@ -175,16 +175,19 @@ public partial class MainWindow
             var title = $"{HostName(hostIndex.GetValueOrDefault(group.Key))} · {rows.Length} 个节点";
             var ok = rows.Count(r => IsNodeAvailable(r.Node, last.GetValueOrDefault(("node", r.Node.Id))));
             var paused = rows.Count(r => IsPaused(r.Node));
-            var row = Ui.Table(rows, [("节点 / 下载", "Name", -1.3), ("协议 / 传输", "Protocol", -1.5),
+            var liveRows = rows.Select(r => new NodeListRow(r, maximum)).ToArray();
+            foreach (var item in liveRows) _nodeRows.Add(item.Node.Id, item);
+            var row = Ui.Table(liveRows, [("节点 / 下载", "Name", -1.3), ("协议 / 传输", "Protocol", -1.5),
                 ("端口", "Port", 68), ("状态", "Status", -1), ("最近延迟", "Delay", 100), ("最近检测", "Recent", 105)],
                 ("详情", item => OpenNode(item.Node.Id)), ("测延迟", item => Run("node", item.Node.Id)), ("测下载", item => Run("speed", item.Node.Id)));
 
             row.Columns[0] = Ui.NavigationColumn("节点 / 最近下载", "Name", "SpeedText", -1.5, 160, maximum);
             row.Columns[1] = Ui.NavigationColumn("协议 / 传输", "Protocol", "", -1.2, 168);
             row.Columns[2] = Ui.NavigationColumn("端口", "Port", "", 64, 64);
-            row.Columns[3] = Ui.NavigationColumn("状态", "Status", progress != null ? "TaskState" : "", -1, 116);
+            row.Columns[3] = Ui.NavigationColumn("状态", "Status", "TaskState", -1, 116);
             row.Columns[^1].Width = new DataGridLength(218);
             row.Columns[^1].MinWidth = 218;
+            _nodeColumns.Attach(row);
             // Keep Details accessible; Run itself guards concurrent submissions.
             row.LoadingRow += (_, e) => e.Row.ToolTip = "拖选文字可复制；双击文字或行内空白查看详情";
             row.RowHeight = double.NaN;
@@ -208,16 +211,19 @@ public partial class MainWindow
                 for (var source = e.OriginalSource as DependencyObject; source is Visual; source = VisualTreeHelper.GetParent(source))
                 {
                     if (source is System.Windows.Controls.Primitives.ButtonBase) return;
-                    if (source is DataGridRow { Item: NodeRow item })
+                    if (source is DataGridRow { Item: NodeListRow item })
                     { e.Handled = true; Dispatcher.BeginInvoke(new Action(() => OpenNode(item.Node.Id))); return; }
                 }
             }
-            var groupCard = Ui.Card(Ui.Stack(Ui.Value(title, 16, true),
-                Ui.Text($"{ok} 可用 · {paused} 已暂停", brush: "Quiet"), row));
+            var summary = Ui.Text($"{ok} 可用 · {paused} 已暂停", brush: "Quiet");
+            _nodeSummaries.Add(group.Key, summary);
+            var groupCard = Ui.Card(Ui.Stack(Ui.Value(title, 16, true), summary, row));
             if (groupIndex++ % 2 == 1) { Ui.Brush(groupCard, Border.BackgroundProperty, "GroupAlt"); Ui.Brush(row, DataGrid.RowBackgroundProperty, "GroupAlt"); }
             root.Children.Add(groupCard);
         }
         if (matching.Length == 0) root.Children.Add(Ui.Card(Ui.Text("没有符合当前条件的节点。可导入分享链接、同步 v2rayN，或在 VPS 中执行一键刷新。")));
+        root.Loaded += (_, _) => _nodeColumns.Fit(root.ActualWidth - 24);
+        root.SizeChanged += (_, e) => { if (e.WidthChanged) _nodeColumns.Fit(root.ActualWidth - 24); };
         return root;
     }
 
@@ -308,7 +314,7 @@ public partial class MainWindow
         return blocks;
     }
 
-    private FrameworkElement ConfigTabs(Node n)
+    private FrameworkElement ConfigTabs(Node n, bool readOnly = false)
     {
         var tabs = new TabControl();
         ShareLink? link = null;
@@ -317,29 +323,51 @@ public partial class MainWindow
         catch (InvalidDataException ex) { missing = ex.Message; }
         var host = _store.Hosts.FirstOrDefault(x => x.Id == n.HostId);
         void Add(string name, UIElement content) => tabs.Items.Add(new TabItem { Header = name, Content = content });
-        Add("客户端", link is null ? Ui.Text(missing) : Fields(link.Fields().ToArray()));
+        Add("客户端", Fields(new DisplayField[] { new("配置来源", ConfigurationSource(n), false),
+            new("客户端取值", n.Link.Length > 0 ? "当前台账中的客户端配置" : link != null ? "从 v2rayN 只读匹配补全，尚未写入台账" : "客户端配置待补", false), new("IP 模式", n.IpMode, false) }
+            .Concat(link is null ? new DisplayField[] { new("客户端资料", missing, false), new("协议", n.Protocol, false),
+                new("连接地址", n.Address, false), new("端口", n.Port.ToString(), false), new("传输", n.Transport, false),
+                new("安全层", n.Security, false), new("客户端身份", n.ClientId, true) } : link.Fields()).ToArray()));
         Add("服务端", n.Server.Count == 0 ? Ui.Text("待补服务端配置，可从 VPS 核对或手工录入。") :
             Fields(n.Server.Select(f => new DisplayField(f.Key, f.Value, ShareLink.IsSensitive(f.Key))).ToArray()));
         Add("回落与关联", Fields(n.Related.Select(f => new DisplayField(f.Key, f.Value, ShareLink.IsSensitive(f.Key)))
             .Concat(n.Server.Where(x => x.Key == "回落").Select(f => new DisplayField(f.Key, f.Value, false)))
             .DefaultIfEmpty(new("状态", "尚未登记回落、域名或外部依赖。", false)).ToArray()));
-        Add("复建清单", Ui.Stack(Fields([
-            new("来源", n.Source, false),
+        var checklist = Ui.Stack(Fields([
+            new("来源", ConfigurationSource(n), false),
             new("关联 VPS", HostName(host), false),
             new("最近核对", n.InventoriedAt?.ToLocalTime().ToString("g") ?? "", false),
             new("1. 核对部署依赖", "确认版本、端口、DNS、回落及证书。保留所需密钥的原保管位置。", false),
             new("2. 服务端入站", n.Server.Count > 0 ? "按服务端和回落页录入。核对云侧和主机侧放行。" : "待补服务端配置。", false),
             new("3. 客户端", link is null ? "待补客户端配置。" : "按客户端页录入，或通过分享导入。", false),
-            new("4. 验证", "在空白测试机复建后，执行真实代理请求。", false)]),
-            Ui.Button("编辑服务端及关联资料", () => EditNode(n))));
-        if (n.Sources.Length > 0)
+            new("4. 验证", "在空白测试机复建后，执行真实代理请求。", false), new("人工备注", n.Notes, false)]));
+        if (!readOnly) checklist.Children.Add(Ui.Button("编辑服务端及关联资料", () => EditNode(n)));
+        Add("复建清单", checklist);
+        var sources = NodeIdentity.Sources(n);
+        if (sources.Length > 0)
             Add("来源记录", Ui.Stack(Ui.Text("来源原始配置保存在加密台账与备份中；下方仅显示来源名称和状态。", brush: "Quiet"),
-                Ui.Table(n.Sources.Select(s => new { s.Kind, s.Name, s.Directory, State = s.Removed ? "来源已移除" : "保留" }),
+                Ui.Table(sources.Select(s => new { s.Kind, s.Name, s.Directory, State = s.Removed ? "来源已移除" : "保留" }),
                     [("来源", "Kind", -1), ("原名称", "Name", -1.5), ("本机目录", "Directory", -2), ("状态", "State", 100)])));
-        tabs.SelectedIndex = Math.Clamp(_configurationTab, 0, tabs.Items.Count - 1);
-        tabs.SelectionChanged += (_, _) => _configurationTab = tabs.SelectedIndex;
+        var snapshots = Ui.Stack();
+        foreach (var source in sources.Where(s => s.Configuration.Length > 0))
+        {
+            try
+            {
+                var snapshot = Wire.Decode<Node>(source.Configuration) with { Sources = [] };
+                snapshots.Children.Add(new Expander { Header = source.Name + " · 关联前配置", Content = ConfigTabs(snapshot, true),
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch });
+            }
+            catch (System.Text.Json.JsonException) { snapshots.Children.Add(Ui.Text("旧配置记录格式无法显示，已保留原始加密数据。")); }
+        }
+        if (snapshots.Children.Count > 0) Add("关联前配置", snapshots);
+        tabs.SelectedIndex = readOnly ? 0 : Math.Clamp(_configurationTab, 0, tabs.Items.Count - 1);
+        if (!readOnly) tabs.SelectionChanged += (_, e) => { if (e.Source == tabs) _configurationTab = tabs.SelectedIndex; };
         return tabs;
     }
+
+    private static string ConfigurationSource(Node node) => string.Join(" + ",
+        NodeIdentity.Sources(node).Where(s => s.Kind is not ("ledger" or "关联前台账")).Select(s => s.Kind)
+            .Append(node.Source).Where(s => s.Length > 0).Distinct());
 
     private Border Reality(Node node, System.Collections.Generic.Dictionary<(string, string), Observation> last)
     {

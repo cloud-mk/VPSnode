@@ -42,7 +42,7 @@ internal static class Program
             app.Startup += (_, _) => app.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var window = (MainWindow)app.MainWindow;
-                window.Title = "VPSnode UI 0.1.9 验收"; window.Width = 1180; window.Height = 740;
+                window.Title = "VPSnode UI " + typeof(Store).Assembly.GetName().Version!.ToString(3) + " 验收"; window.Width = 1180; window.Height = 740;
                 ((DispatcherTimer)typeof(MainWindow).GetField("_timer", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!).Stop();
             }));
             app.Run();

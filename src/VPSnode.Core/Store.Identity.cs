@@ -43,14 +43,14 @@ public sealed partial class Store
         using var db = Open(); using var tx = db.BeginTransaction();
         var nodes = List<Node>(db, tx, "node");
         var keep = nodes.Single(n => n.Id == keepId); var remove = nodes.Single(n => n.Id == removeId);
-        if (!NodeIdentity.Compare(keep, remove, List<Host>(db, tx, "host")).CanMerge)
-            throw new InvalidDataException("关键身份冲突或没有关联依据，不能合并。");
+        if (!NodeIdentity.Compare(keep, remove, List<Host>(db, tx, "host")).CanAssociate)
+            throw new InvalidDataException("配置存在明确冲突或没有关联依据，请暂缓关联并核对原始配置。");
         MergeNodes(db, tx, keep, remove, confirmed: true); tx.Commit();
     }
 
     private static Node MergeNodes(SqliteConnection db, SqliteTransaction tx, Node keep, Node remove, bool confirmed = false)
     {
-        var merged = NodeIdentity.Merge(keep, remove);
+        var merged = NodeIdentity.Merge(keep, remove, associate: true);
         if (confirmed) merged = merged with { Sources = merged.Sources.Select(s => s with { Confirmed = true }).ToArray() };
         Put(db, tx, "node", keep.Id, merged);
         foreach (var web in List<WebTarget>(db, tx, "web"))

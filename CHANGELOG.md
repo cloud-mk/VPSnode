@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.10 — 2026-11-21
+
+- Update node progress and observations in place instead of rebuilding the page at task start, progress, completion or periodic refresh.
+- Share column widths, native resize/reorder state and horizontal scrolling across VPS groups; retain manual widths through filtering, navigation and resizing.
+- Add subtle interior header separators using the existing theme border brush, without adding data-row grid lines or replacing native resize grips.
+- Open reusable, read-only left/right configuration windows owned by duplicate review; retain the review and main page, and close old views when switching pairs or closing review.
+- Clarify that left/right reflect local ID ordering, show actual sources and distinguish missing information from conflicts. Defer association while known identity or route conflicts remain.
+- Preserve both complete pre-association configurations as encrypted source snapshots, union notes and history, and retain existing metadata while filling missing fields. No database schema migration or external configuration writes.
+- Keep changed source routes separate on subsequent sync. Add WPF layout/window lifecycle, association/backup and real loopback proxy stability regression coverage.
+- Reuse the unchanged v0.1.9 screenshots. Validation scope: [validation-0.1.10.md](docs/validation-0.1.10.md).
+
 ## 0.1.9 — 2026-11-20
 
 - Add an explicit persisted, off-by-default scheduled inspection switch, including legacy settings migration.

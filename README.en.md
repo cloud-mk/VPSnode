@@ -48,6 +48,15 @@ Share links, QR codes, and individual node configuration exports may contain cre
 
 Checks connect to your configured servers, websites, and test endpoints. Download tests consume traffic. Batch downloads run sequentially, with a 45-second limit per node and the configured byte limit.
 
+## What's new in 0.1.10
+
+- Update node test progress and results in place, preserving controls, selection, scrolling and manually resized widths.
+- Share widths, native column ordering and horizontal scrolling across groups, with subtle header-only separators.
+- Keep duplicate review open while reusable, read-only left/right configuration windows show actual sources and masked credentials.
+- Defer conflicting associations. Preserve complete pre-association configurations in encrypted source snapshots, along with provenance, notes, history and relationships. External VPS and v2rayN configurations are not modified.
+
+See [validation and limits](docs/validation-0.1.10.md). Screenshots below remain the unchanged v0.1.9 images.
+
 ## What's new in 0.1.9
 
 - Consistent node hover and double-click navigation, selectable text, and inactive-selection cleanup.
@@ -84,7 +93,7 @@ Choose a fresh output directory. MSI packaging additionally requires WiX 5; spec
 
 ## Limitations and feedback
 
-Version 0.1.9 passed Release builds, isolated regressions, local Xray proxy integration, and runtime WPF rendering checks. OS mouse interactions, physical multi-monitor DPI transitions, cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended operation remain unverified. See [validation evidence](docs/validation-0.1.9.md). Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
+See the precise [0.1.10 validation scope](docs/validation-0.1.10.md). Physical multi-monitor DPI transitions, cross-computer restoration, clean-system installation/upgrade/uninstallation, and extended operation remain unverified. Protocol and parameter support depends on the local proxy core and configuration. Unrecognized or incomplete configurations require review and should not be treated as verified.
 
 Please include the application version, reproduction steps, expected behavior, and sanitized error details when opening an issue. Do not upload real asset databases, backups, private keys, or share links.
 

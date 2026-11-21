@@ -149,6 +149,8 @@ public static class V2Sync
         var changed = new Dictionary<string, Node>();
         void Change(Node node) { changed[node.Id] = node; saved[node.Id] = node; }
         bool Source(NodeSource source, string id) => source.Kind == "v2rayN" && source.Key == id && NodeIdentity.SameDirectory(source.Directory, path);
+        bool KeepConfiguration(Node node) => node.VpsVerified || node.Manual || node.Sources.Any(s => s.Confirmed) ||
+            NodeIdentity.Sources(node).Count(s => s.Kind == "v2rayN" && !s.Removed) > 1;
         int added = 0, updated = 0, paused = 0, unsupported = 0;
         List<string> conflicts = [];
         foreach (var group in groups)
@@ -170,12 +172,12 @@ public static class V2Sync
             var existing = saved.Values.FirstOrDefault(n => NodeIdentity.Sources(n).Any(s => Source(s, profile.Id)));
             var confirmed = existing is not null && NodeIdentity.Sources(existing).Any(s => Source(s, profile.Id) && s.Confirmed);
             if (confirmed) incomingSource = incomingSource with { Confirmed = true };
-            if (existing is not null && (existing.VpsVerified || existing.Manual))
+            if (existing is not null && KeepConfiguration(existing))
             {
                 var comparison = NodeIdentity.Compare(existing, candidate, hosts);
-                if (comparison.Disposition != "Same" && !(confirmed && comparison.CanMerge))
+                if (comparison.Disposition != "Same" && !(confirmed && comparison.CanAssociate))
                 {
-                    // Keep the server-verified client and its history; a changed source becomes a separate candidate.
+                    // Preserve the associated/verified client; a changed source becomes a separate candidate.
                     var sources = NodeIdentity.Sources(existing).Select(s => Source(s, profile.Id)
                         ? s with { Kind = "v2rayN-history", Removed = true } : s).ToArray();
                     Change(existing with { Sources = sources, V2Id = "", V2Directory = "", GroupId = "" });
@@ -196,7 +198,7 @@ public static class V2Sync
                     Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(candidate.Link)))[..8] };
                 Change(candidate); added++; continue;
             }
-            var merged = NodeIdentity.Merge(existing, candidate, preferIncoming: !existing.Manual && !existing.VpsVerified);
+            var merged = NodeIdentity.Merge(existing, candidate, preferIncoming: !KeepConfiguration(existing));
             merged = merged with
             {
                 Sources = NodeIdentity.OrderedSources(NodeIdentity.Sources(merged).Where(s => !Source(s, profile.Id)).Append(incomingSource)),

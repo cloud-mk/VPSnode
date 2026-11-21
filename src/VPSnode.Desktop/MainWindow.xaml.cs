@@ -64,7 +64,7 @@ public partial class MainWindow : Window
             var source = (System.Windows.Interop.HwndSource)System.Windows.PresentationSource.FromVisual(this)!;
             _tray = new TrayIcon(source, _store.DirectoryPath, ShowWindow, Quit);
         };
-        Closed += (_, _) => _tray?.Dispose();
+        Closed += (_, _) => { _tray?.Dispose(); _nodeColumns.Detach(); _monitor.Changed -= TaskChanged; };
         Closing += WindowClosing;
         _timer.Tick += TimerTick;
         _timer.Start();
@@ -105,6 +105,8 @@ public partial class MainWindow : Window
         }
         _changes.Connection?.Dispose();
         _changes.Dispose();
+        _monitor.Changed -= TaskChanged;
+        _nodeColumns.Detach();
         Application.Current.Shutdown();
     }
 
@@ -151,7 +153,7 @@ public partial class MainWindow : Window
         if (_renderVersion == version) return;
         _renderVersion = version;
         var offset = Scroller.VerticalOffset;
-        Render();
+        RefreshVisibleData();
         Scroller.ScrollToVerticalOffset(offset);
     }
 
@@ -168,7 +170,7 @@ public partial class MainWindow : Window
             Status(nodeAction ? _nodeFeedback : message);
         }
         Feedback("等待执行");
-        Render();
+        RefreshVisibleData();
         try
         {
             void Started() => Dispatcher.BeginInvoke(new Action(() =>
@@ -186,7 +188,7 @@ public partial class MainWindow : Window
         {
             _manualRun = null;
             _current = null;
-            if (!_closing) Render();
+            if (!_closing) RefreshVisibleData();
         }
     }
 
@@ -226,6 +228,10 @@ public partial class MainWindow : Window
 
     private void Render()
     {
+        _nodeColumns.Detach();
+        _nodeRows.Clear();
+        _nodeSummaries.Clear();
+        _nodeCancel = null;
         _intervalMinutes = _store.Settings.IntervalMinutes;
         UpdateTaskPanel();
         Navigation.Children.Clear();
@@ -258,7 +264,7 @@ public partial class MainWindow : Window
         if (_history.Count > 0) row.Children.Add(Ui.Button("返回", Back));
         row.Children.Add(text);
         foreach (var button in buttons) row.Children.Add(button);
-        if (_current != null) row.Children.Add(Ui.Button("取消任务", () => _current?.Cancel()));
+        if (_current != null && _page != "nodes") row.Children.Add(Ui.Button("取消任务", () => _current?.Cancel()));
         row.Margin = new Thickness(0, 0, 0, 9);
         return Ui.Stack(row);
     }

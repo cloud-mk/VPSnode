@@ -10,4 +10,5 @@
   <Project Path="tests/VPSnode.FormTests/VPSnode.FormTests.csproj" />
   <Project Path="tests/VPSnode.UiRegression/VPSnode.UiRegression.csproj" />
   <Project Path="tests/VPSnode.ProxyUiTests/VPSnode.ProxyUiTests.csproj" />
+  <Project Path="tests/VPSnode.StabilityTests/VPSnode.StabilityTests.csproj" />
 </Solution>
