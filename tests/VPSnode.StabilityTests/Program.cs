@@ -17,6 +17,8 @@ internal static class Program
     private static void Main(string[] args)
     {
         if (args.Length == 0 || Directory.Exists(args[0])) throw new ArgumentException("Fresh isolated data directory required.");
+        if (Environment.GetEnvironmentVariable("VPSNODE_TEST_CULTURE") is string culture)
+            System.Globalization.CultureInfo.CurrentCulture = new(culture);
         var root = Path.GetFullPath(args[0]); Environment.SetEnvironmentVariable("VPSNODE_DATA", root);
         var store = new Store();
         store.Save(new Host { Id = "a", Name = "示例 VPS A", Address = "192.0.2.1", Enabled = false });
@@ -52,8 +54,11 @@ internal static class Program
             Aligned();
             grids[1].Columns[0].Width = 275; grids[2].Columns[3].Width = 180; Pump(); Aligned();
             var page = ((ContentControl)window.FindName("PageBody")).Content;
-            var row = grids[0].Items[1]; grids[0].SelectedItem = row;
-            var selected = Walk(grids[0]).OfType<LedgerTextBox>().First(t => t.Text == "示例节点 01"); selected.Focus(); selected.Select(0, 2);
+            // Group ordering follows the user's culture; locate the fixture by stable ID.
+            bool IsTarget(object item) => ((Node)item.GetType().GetProperty("Node")!.GetValue(item)!).Id == "n01";
+            var targetGrid = grids.Single(g => g.Items.Cast<object>().Any(IsTarget));
+            var row = targetGrid.Items.Cast<object>().Single(IsTarget); targetGrid.SelectedItem = row;
+            var selected = Walk(targetGrid).OfType<LedgerTextBox>().First(t => t.Text == "示例节点 01"); selected.Focus(); selected.Select(0, 2);
             var scroll = (ScrollViewer)window.FindName("Scroller"); scroll.ScrollToVerticalOffset(120); Pump();
             var offset = scroll.VerticalOffset; var notices = new List<string>();
             ((INotifyPropertyChanged)row).PropertyChanged += (_, e) => notices.Add(e.PropertyName!);
@@ -65,7 +70,7 @@ internal static class Program
                     [new("node", "n01", "示例节点 01", state, state == "跳过" ? "执行中取消" : "")]);
                 Task.Run(() => Call("TaskChanged", task)).GetAwaiter().GetResult(); Pump();
                 Check(ReferenceEquals(page, ((ContentControl)window.FindName("PageBody")).Content) && Grids().SequenceEqual(grids), "progress preserves page and all grids: " + state);
-                Check(ReferenceEquals(row, grids[0].SelectedItem) && selected.SelectedText == "示例" && Math.Abs(offset - scroll.VerticalOffset) < .5, "row/text selection and scroll preserved: " + state);
+                Check(ReferenceEquals(row, targetGrid.SelectedItem) && selected.SelectedText == "示例" && Math.Abs(offset - scroll.VerticalOffset) < .5, "row/text selection and scroll preserved: " + state);
                 Check(grids.All(g => Math.Abs(g.Columns[0].ActualWidth - 275) < .5 && Math.Abs(g.Columns[3].ActualWidth - 180) < .5), "manual widths preserved: " + state);
                 Check((string)row.GetType().GetProperty("TaskState")!.GetValue(row)! == (state == "跳过" ? "跳过 · 执行中取消" : state), "final task state displayed: " + state);
             }
