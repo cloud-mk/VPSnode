@@ -6,7 +6,7 @@
 
 Release 构建 0 警告、0 错误。10 套测试通过：Smoke、BackupTests、IdentityTests、InventoryChecks、UiBatch、FormTests、UiRegression、StabilityTests、AgentTests、ProxyUiTests。测试均使用独立数据目录。
 
-- **AgentTests：88 项检查**。启动真正的 CLI 子进程和独立 worker，覆盖 JSON/退出码、资产增改删、SSH 凭据保护、字段清空/false/空数组、修订冲突、非法输入、配置默认遮罩及显式查看、来源同步、备份预览/恢复、任务历史、排队取消、无 GUI 执行、真实回环 SSH 失败、HTTP/HTML title 及 TLS 失败区分。模拟中断记录只用于补充边界；真正进程被终止的恢复由下一套验证。
+- **AgentTests：89 项检查**。启动真正的 CLI 子进程和独立 worker，覆盖 JSON/退出码、资产增改删、SSH 凭据保护、字段清空/false/空数组、修订冲突、非法输入、配置默认遮罩及显式查看、来源同步、备份预览/恢复、任务历史、排队取消、无 GUI 执行、真实回环 SSH 失败、HTTP/HTML title 及 TLS 失败区分。模拟中断记录只用于补充边界；真正进程被终止的恢复由下一套验证。
 - **ProxyUiTests：实际 Xray 回环**。独立 VLESS 服务和受限 HTTP origin；单节点和全库延迟/下载均到达服务端，下载按字节上限截断。测试期间修改窗口尺寸，保持页、行、手调列宽和选择不变。实际 HTTP 失败、取消和 18 秒请求超时保留正确终态。
 - **实际跨进程闭环**。GUI 存在但其 tick 停止时，CLI worker 独立完成真实延迟/下载；提交可及时返回，重复活动请求复用 ID。查询持久 running 进度，等待超时不取消任务，GUI 取消 CLI worker，CLI 取消 GUI 正在执行的任务，排队任务可取消。
 - **真正执行进程中断**。读取任务记录的 executorPid，并确认进程路径为本测试 CLI 后终止它及其子进程。下一次 task wait 将原任务标为 failed / executor_interrupted，没有假成功或永久 running。

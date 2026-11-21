@@ -83,11 +83,14 @@ Check(ObservationState.Current(new("node", "n", at, "可用")) == "可用", "old
 Check(ObservationState.Current(new("tls", "w", at, "TLS 正常", Expires: DateTimeOffset.Now.AddMinutes(-1))) == "证书已过期", "real expiration remains dynamic");
 Check(ObservationState.Current(new("tls", "w", at, "TLS 正常", Expires: DateTimeOffset.Now.AddDays(40))) == "TLS 正常", "old TLS observation does not decay");
 var backup = Path.Combine(root, "fixture.vpsbackup"); var password = new { password = "fictional-backup-password" };
-Run(["backup", "export", backup], password); Run(["backup", "preview", backup], password);
+var backupQueued = store.SubmitTask("node", "n");
+Run(["backup", "export", backup], password);
+Check(Run(["backup", "preview", backup], password).GetProperty("requests").GetInt32() == 1, "backup preview counts durable pending tasks");
 Run(["backup", "preview", backup], new { password = "wrong" }, 2);
 Run(["asset", "delete", "node", "n"]); Check(store.Websites.Single().CertificateNodeIds.Length == 0, "delete cleans relations");
 Run(["backup", "restore", backup, "--mode", "replace"], password);
 Check(store.Nodes.Single().Id == "n" && store.GetTask(id)!.Terminal, "encrypted restore includes durable task receipts");
+store.CancelTask(backupQueued.Id);
 Run(["asset", "list", "host"]); Run(["asset", "list", "node"]); Run(["asset", "list", "web"]); Run(["status"]); Run(["data", "info"]);
 Run(["node", "duplicates"]); Run(["history", "node", "n", "--limit", "-1"], expected: 2); Run(["version", "--typo"], expected: 2);
 var v2 = Path.Combine(root, "fictional-v2rayn"); Directory.CreateDirectory(Path.Combine(v2, "guiConfigs"));

@@ -170,11 +170,12 @@ public sealed partial class Store
 
     private static BackupPreview Preview(BackupSnapshot snapshot) => new(
         snapshot.Assets.Count(a => a.Kind == "host"), snapshot.Assets.Count(a => a.Kind == "node"),
-        snapshot.Assets.Count(a => a.Kind == "web"), snapshot.Observations.Length, snapshot.Requests.Length, snapshot.Notices.Length,
+        snapshot.Assets.Count(a => a.Kind == "web"), snapshot.Observations.Length,
+        snapshot.Requests.Length + snapshot.Assets.Count(a => a.Kind == "inspection-task" && a.Data.Deserialize<InspectionTask>(Wire.Json) is { Terminal: false }), snapshot.Notices.Length,
         ["备份包含客户端与服务端配置、SSH 密码；恢复后由当前 Windows 用户重新加密。",
          "外部 SSH 私钥、OpenSSH 配置与 v2rayN 程序未包含；跨电脑恢复后需重新定位路径、别名与依赖。",
          "合并：相同 ID 保留本机内容，身份冲突时拒绝合并；历史去重，高可信重复节点自动关联。替换：原台账、历史与设置全部替换。",
-         "待执行任务会恢复；桌面导入完成后继续自动巡检，请在导入前核对目标及依赖。"]);
+         "待执行任务会恢复；运行中回执在下次执行时记为中断。桌面导入完成后可继续处理队列，请在导入前核对目标及依赖。"]);
 
     public BackupPreview PreviewBackup(string path, string password)
     {

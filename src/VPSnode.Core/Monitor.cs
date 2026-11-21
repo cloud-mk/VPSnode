@@ -76,8 +76,8 @@ public sealed class Monitor
 
     private async Task ExecuteTask(InspectionTask task, CancellationToken token)
     {
-        task = task with { State = "running", ExecutorPid = Environment.ProcessId };
-        _store.UpdateTask(task);
+        if (_store.StartTask(task.Id) is not InspectionTask started) return;
+        task = started;
         using var poll = new CancellationTokenSource();
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(token);
         async Task WatchCancellation()
@@ -104,7 +104,7 @@ public sealed class Monitor
             var failed = result.Failed > 0 || result.Items.Length == 0 || result.Success == 0 && result.Skipped > 0;
             _store.UpdateTask(current with { State = canceled ? "canceled" : failed ? "failed" : "completed",
                 ErrorCode = canceled ? "canceled" : failed ? "inspection_failed" : "",
-                Error = canceled ? "任务已取消" : failed ? string.Join(" · ", result.Items.Where(i => i.State != "成功").Select(i => i.Detail).Distinct()) : "" });
+                Error = canceled ? "任务已取消" : result.Items.Length == 0 ? "没有可检测的目标" : failed ? string.Join(" · ", result.Items.Where(i => i.State != "成功").Select(i => i.Detail).Distinct()) : "" });
         }
         catch (Exception ex)
         {
@@ -222,7 +222,8 @@ public sealed class Monitor
                     items[i] = items[i] with { State = "跳过", Detail = items[i].State == "排队" ? "任务取消，尚未开始" : "执行中取消" };
         }
         finally { lock (_stateLock) _active = null; }
-        var final = Snapshot(cancel.IsCancellationRequested ? "已取消" : "已结束");
+        var failed = items.Length == 0 || items.Any(i => i.State is "失败" or "超时") || items.All(i => i.State == "跳过");
+        var final = Snapshot(cancel.IsCancellationRequested ? "已取消" : failed ? "已失败" : "已完成");
         _store.Record(new("task", "history", DateTimeOffset.Now, final.State, Wire.Encode(final)));
         Changed?.Invoke(final);
         return items.Length == 1 ? $"{items[0].State} · {items[0].Detail}" : final.Summary;

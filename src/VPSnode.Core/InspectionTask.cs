@@ -76,6 +76,15 @@ public sealed partial class Store
         tx.Commit(); return task;
     }
 
+    internal InspectionTask? StartTask(string id)
+    {
+        using var db = Open(); using var tx = db.BeginTransaction();
+        var current = ReadTask(db, tx, id);
+        if (current is null || current.State != "queued" || current.CancelRequested) return null;
+        var task = current with { State = "running", ExecutorPid = Environment.ProcessId, Updated = DateTimeOffset.UtcNow };
+        Put(db, tx, "inspection-task", id, task); tx.Commit(); return task;
+    }
+
     internal void UpdateTask(InspectionTask task)
     {
         using var db = Open(); using var tx = db.BeginTransaction();

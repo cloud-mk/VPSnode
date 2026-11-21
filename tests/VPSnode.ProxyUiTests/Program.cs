@@ -233,17 +233,27 @@ internal static class Program
         Check(Run(6, "task", "wait", manual.Id).GetProperty("state").GetString() == "canceled", "CLI cancels GUI task through shared cancellation flag");
         while (typeof(MainWindow).GetField("_current", Private)!.GetValue(window) != null)
         { window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle); Thread.Sleep(10); }
-        var crashId = Run(0, "check", "node", "loopback").GetProperty("task").GetProperty("id").GetString()!;
-        var deadline = Stopwatch.StartNew();
-        InspectionTask crashed;
-        do { crashed = store.GetTask(crashId)!; Thread.Sleep(20); } while (crashed.ExecutorPid == 0 && deadline.Elapsed.TotalSeconds < 5);
-        Check(crashed.State == "running" && crashed.ExecutorPid != 0, "actual worker ownership recorded before crash");
-        using (var executor = Process.GetProcessById(crashed.ExecutorPid))
+        // A GUI is allowed to consume CLI work. Isolate the crash-only database so
+        // this test can kill its own worker without terminating the WPF test host.
+        var crashStore = new Store(Path.Combine(store.DirectoryPath, "worker-crash"));
+        crashStore.Save(store.Settings); crashStore.Save(store.Nodes.Single());
+        var previousData = Environment.GetEnvironmentVariable("VPSNODE_DATA");
+        Environment.SetEnvironmentVariable("VPSNODE_DATA", crashStore.DirectoryPath);
+        try
         {
-            Check(Path.GetFullPath(executor.MainModule!.FileName).Equals(Path.GetFullPath(cli), StringComparison.OrdinalIgnoreCase), "crash test targets only its own CLI executable");
-            executor.Kill(true); executor.WaitForExit();
+            var crashId = Run(0, "check", "node", "loopback").GetProperty("task").GetProperty("id").GetString()!;
+            var deadline = Stopwatch.StartNew();
+            InspectionTask crashed;
+            do { crashed = crashStore.GetTask(crashId)!; Thread.Sleep(20); } while (crashed.ExecutorPid == 0 && deadline.Elapsed.TotalSeconds < 5);
+            Check(crashed.State == "running" && crashed.ExecutorPid != 0, "actual worker ownership recorded before crash");
+            using (var executor = Process.GetProcessById(crashed.ExecutorPid))
+            {
+                Check(Path.GetFullPath(executor.MainModule!.FileName).Equals(Path.GetFullPath(cli), StringComparison.OrdinalIgnoreCase), "crash test targets only its own CLI executable");
+                executor.Kill(true); executor.WaitForExit();
+            }
+            Check(Run(5, "task", "wait", crashId).GetProperty("errorCode").GetString() == "executor_interrupted", "actual killed worker recovers as failed, never permanently running");
         }
-        Check(Run(5, "task", "wait", crashId).GetProperty("errorCode").GetString() == "executor_interrupted", "actual killed worker recovers as failed, never permanently running");
+        finally { Environment.SetEnvironmentVariable("VPSNODE_DATA", previousData); }
         store.Save(new WebTarget { Id = "expired-tls", Name = "虚构过期证书", Domain = "127.0.0.1", Sni = "tls-fixture.example.org", Port = tlsPort, CheckWebsite = false });
         Run(5, "check", "tls", "expired-tls", "--wait");
         var observedCertificate = store.Latest()[("tls", "expired-tls")];
